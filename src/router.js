@@ -1,5 +1,6 @@
 // ============================================
-// Simple Router
+// Simple Router with Auth Support
+import { getCurrentUser, isAdmin } from './store/dataStore.js';
 // ============================================
 
 const routes = {};
@@ -21,12 +22,34 @@ export function getCurrentRoute() {
 
 export function renderRoute() {
     const path = getCurrentRoute();
+    const user = getCurrentUser();
+
+    // 1. If not logged in and not on login page, go to login
+    if (!user && path !== '/login') {
+        navigate('/login');
+        return;
+    }
+
+    // 2. If logged in and on login page, go to dashboard
+    if (user && path === '/login') {
+        navigate('/dashboard');
+        return;
+    }
+
+    // 3. Admin restricted routes
+    if (path === '/configuracoes' && !isAdmin()) {
+        alert('Acesso negado: Somente administradores podem acessar as configurações.');
+        navigate('/dashboard');
+        return;
+    }
+
     const handler = routes[path];
     if (handler) {
         handler();
     } else {
-        // Default: dashboard
-        if (routes['/dashboard']) routes['/dashboard']();
+        // Default: dashboard or login
+        const defaultPath = user ? '/dashboard' : '/login';
+        if (routes[defaultPath]) routes[defaultPath]();
     }
 
     // Update active nav

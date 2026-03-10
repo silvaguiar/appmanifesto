@@ -8,6 +8,8 @@ import { renderMDFeEmissao } from './pages/mdfe-emissao.js';
 import { renderMDFeLista } from './pages/mdfe-lista.js';
 import { renderEmpresa } from './pages/empresa.js';
 import { renderConfiguracoes } from './pages/configuracoes.js';
+import { renderLogin } from './pages/login.js';
+import { getCurrentUser, login as authLogin, logout as authLogout } from './store/dataStore.js';
 
 // Register routes
 registerRoute('/dashboard', renderDashboard);
@@ -17,10 +19,19 @@ registerRoute('/mdfe-emissao', renderMDFeEmissao);
 registerRoute('/mdfe-lista', renderMDFeLista);
 registerRoute('/empresa', renderEmpresa);
 registerRoute('/configuracoes', renderConfiguracoes);
+registerRoute('/login', renderLogin);
 
 // Build app layout
 function initApp() {
   const app = document.getElementById('app');
+  const user = getCurrentUser();
+
+  if (!user) {
+    app.innerHTML = `<div id="page-content"></div>`;
+    renderRoute();
+    return;
+  }
+
   app.innerHTML = `
     <button class="mobile-menu-btn" id="mobile-menu-btn">
       <i class="fa-solid fa-bars"></i>
@@ -38,14 +49,24 @@ function initApp() {
     document.getElementById('sidebar')?.classList.toggle('open');
   });
 
-  // Navigate to initial route
-  const hash = window.location.hash.slice(1);
-  if (hash) {
-    renderRoute();
-  } else {
-    navigate('/dashboard');
-  }
+  renderRoute();
 }
+
+// Global Handlers
+window.handleLogin = (username, password) => {
+  if (authLogin(username, password)) {
+    initApp();
+    navigate('/dashboard');
+    return true;
+  }
+  return false;
+};
+
+window.handleLogout = () => {
+  authLogout();
+  initApp();
+  navigate('/login');
+};
 
 // Start app
 initApp();

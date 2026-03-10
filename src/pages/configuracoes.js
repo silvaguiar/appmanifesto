@@ -1,5 +1,6 @@
 import { getConfigData, saveConfig, isConfigured } from '../services/focusNfe.js';
 import { showToast } from '../components/toast.js';
+import { getUsers, saveUser, deleteUser } from '../store/dataStore.js';
 
 export function renderConfiguracoes() {
     const cfg = getConfigData();
@@ -55,6 +56,70 @@ export function renderConfiguracoes() {
         </div>
       </div>
     </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-header">
+        <h3><i class="fa-solid fa-users" style="color:var(--primary-400);margin-right:8px"></i>Gestão de Usuários</h3>
+      </div>
+      <div class="card-body">
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Login</th>
+                <th>Senha</th>
+                <th>Cargo</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body">
+              ${getUsers().map(user => `
+                <tr>
+                  <td>${user.nome}</td>
+                  <td>${user.login}</td>
+                  <td>${user.senha}</td>
+                  <td><span class="badge ${user.role === 'admin' ? 'badge-primary' : 'badge-info'}">${user.role === 'admin' ? 'Admin' : 'Padrão'}</span></td>
+                  <td>
+                    ${user.login !== 'TI' ? `
+                      <button class="btn btn-sm btn-danger delete-user" data-id="${user.id}"><i class="fa-solid fa-trash"></i></button>
+                    ` : '<span style="font-size:0.7rem;color:var(--text-muted)">Protegido</span>'}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        
+        <div style="margin-top:20px;padding:20px;background:rgba(255,255,255,0.03);border-radius:var(--radius-md);border:1px solid var(--border-color)">
+          <h4 style="margin-bottom:12px;font-size:0.9rem">Criar Novo Usuário</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Nome Completo</label>
+              <input type="text" class="form-control" id="new-user-nome" placeholder="Ex: João Silva">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Login</label>
+              <input type="text" class="form-control" id="new-user-login" placeholder="Ex: joao.silva">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Senha</label>
+              <input type="text" class="form-control" id="new-user-senha" placeholder="Senha de acesso">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Cargo</label>
+              <select class="form-control form-select" id="new-user-role">
+                <option value="user">Padrão (Acesso à emissão)</option>
+                <option value="admin">Administrador (Acesso total)</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" id="add-user"><i class="fa-solid fa-plus"></i> Criar Usuário</button>
+        </div>
+      </div>
+    </div>
   </div>`;
 
     document.getElementById('save-config').addEventListener('click', () => {
@@ -79,5 +144,33 @@ export function renderConfiguracoes() {
         } catch {
             showToast('Servidor proxy não encontrado. Execute: node server.js', 'error');
         }
+    });
+
+    // User management handlers
+    document.getElementById('add-user').addEventListener('click', () => {
+        const nome = document.getElementById('new-user-nome').value.trim();
+        const login = document.getElementById('new-user-login').value.trim();
+        const senha = document.getElementById('new-user-senha').value.trim();
+        const role = document.getElementById('new-user-role').value;
+
+        if (!nome || !login || !senha) {
+            showToast('Preencha todos os campos do novo usuário', 'error');
+            return;
+        }
+
+        saveUser({ nome, login, senha, role });
+        showToast('Usuário criado com sucesso!', 'success');
+        renderConfiguracoes();
+    });
+
+    document.querySelectorAll('.delete-user').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-id');
+            if (confirm('Tem certeza que deseja excluir este usuário?')) {
+                deleteUser(id);
+                showToast('Usuário removido', 'success');
+                renderConfiguracoes();
+            }
+        });
     });
 }

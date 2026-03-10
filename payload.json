@@ -1,5 +1,53 @@
 {
-  "data": "2026-03-10",
-  "sigla_uf": "RN",
-  "nome_municipio": "natal"
+  "emitente": 2,
+  "modal": 1,
+  "serie": "1",
+  "numero": null,
+  "data_emissao": "2026-03-10",
+  "uf_inicio": "PB",
+  "uf_fim": "RN",
+  "cnpj_emitente": "40950354000111",
+  "razao_social_emitente": "R V COMERCIO DE CONFECCOES LTDA",
+  "inscricao_estadual_emitente": "160941067",
+  "uf_emitente": "PB",
+  "municipio_emitente": "CAMPINA GRANDE",
+  "codigo_municipio_emitente": "2504009",
+  "municipios_carregamento": [
+    {
+      "codigo": "2504009",
+      "nome": "campina grande"
+    }
+  ],
+  "municipios_descarregamento": [
+    {
+      "codigo": "2504009",
+      "nome": "campina grande",
+      "notas_fiscais": [
+        {
+          "chave_nfe": "25260244498615000165550010000038441243379914"
+        }
+      ]
+    }
+  ],
+  "quantidade_total_cte": 0,
+  "quantidade_total_nfe": 1,
+  "valor_total_carga": 14000,
+  "codigo_unidade_medida_peso_bruto": "01",
+  "peso_bruto": 115,
+  "informacoes_adicionais_fisco": "teste",
+  "modal_rodoviario": {
+    "placa_veiculo": "OYB0I60",
+    "renavam_veiculo": "01028531769",
+    "tara_veiculo": 2000,
+    "capacidade_kg_veiculo": 1500,
+    "tipo_rodado_veiculo": "04",
+    "tipo_carroceria_veiculo": "02",
+    "uf_licenciamento_veiculo": "PB",
+    "condutores": [
+      {
+        "nome": "paulo cesar da rocha guimaraes",
+        "cpf": "01774124459"
+      }
+    ]
+  }
 }

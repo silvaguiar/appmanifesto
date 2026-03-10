@@ -8,7 +8,13 @@ const STORAGE_KEYS = {
     MDFES: 'mdfe_mdfes',
     EMPRESA: 'mdfe_empresa',
     NUMERO_MDFE: 'mdfe_ultimo_numero',
+    USERS: 'mdfe_users',
+    SESSION: 'mdfe_session',
 };
+
+// Limpa sessão antiga salva em localStorage (versões anteriores)
+localStorage.removeItem('mdfe_session');
+
 
 function getItem(key) {
     try {
@@ -167,7 +173,6 @@ function gerarChaveAcesso(mdfe) {
     const dv = String(Math.floor(Math.random() * 10));
     return (base + dv).slice(0, 44);
 }
-
 // ---- Estatísticas ----
 export function getEstatisticas() {
     const mdfes = getMDFes();
@@ -182,4 +187,64 @@ export function getEstatisticas() {
         totalMotoristas: motoristas.filter(m => m.ativo !== false).length,
         totalVeiculos: veiculos.filter(v => v.ativo !== false).length,
     };
+}
+
+// ---- Usuários e Autenticação ----
+const INITIAL_USERS = [
+    { id: '1', login: 'TI', senha: '286284', nome: 'TI Administrador', role: 'admin' },
+    { id: '2', login: 'padrao', senha: '123', nome: 'Operador Padrão', role: 'user' }
+];
+
+export function getUsers() {
+    let users = getItem(STORAGE_KEYS.USERS);
+    if (!users) {
+        users = INITIAL_USERS;
+        setItem(STORAGE_KEYS.USERS, users);
+    }
+    return users;
+}
+
+export function saveUser(user) {
+    const users = getUsers();
+    if (user.id) {
+        const idx = users.findIndex(u => u.id === user.id);
+        if (idx !== -1) users[idx] = { ...users[idx], ...user };
+    } else {
+        user.id = crypto.randomUUID();
+        users.push(user);
+    }
+    setItem(STORAGE_KEYS.USERS, users);
+    return user;
+}
+
+export function deleteUser(id) {
+    const users = getUsers().filter(u => u.id !== id);
+    setItem(STORAGE_KEYS.USERS, users);
+}
+
+export function login(login, senha) {
+    const users = getUsers();
+    const user = users.find(u => u.login === login && u.senha === senha);
+    if (user) {
+        // sessionStorage: session clears when browser is closed
+        sessionStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify({ ...user, senha: null }));
+        return true;
+    }
+    return false;
+}
+
+export function logout() {
+    sessionStorage.removeItem(STORAGE_KEYS.SESSION);
+}
+
+export function getCurrentUser() {
+    try {
+        const data = sessionStorage.getItem(STORAGE_KEYS.SESSION);
+        return data ? JSON.parse(data) : null;
+    } catch { return null; }
+}
+
+export function isAdmin() {
+    const user = getCurrentUser();
+    return user && user.role === 'admin';
 }

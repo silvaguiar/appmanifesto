@@ -3,6 +3,7 @@
 // ============================================
 
 import { navigate, getCurrentRoute } from '../router.js';
+import { getCurrentUser, isAdmin } from '../store/dataStore.js';
 
 export function renderSidebar() {
   const menuItems = [
@@ -13,11 +14,15 @@ export function renderSidebar() {
     { icon: 'fa-id-card', label: 'Motoristas', route: '/motoristas' },
     { icon: 'fa-truck', label: 'Veículos', route: '/veiculos' },
     { icon: 'fa-building', label: 'Empresa', route: '/empresa' },
-    { section: 'Sistema' },
-    { icon: 'fa-gear', label: 'Configurações', route: '/configuracoes' },
   ];
 
+  if (isAdmin()) {
+    menuItems.push({ section: 'Sistema' });
+    menuItems.push({ icon: 'fa-gear', label: 'Configurações', route: '/configuracoes' });
+  }
+
   const currentRoute = getCurrentRoute();
+  const user = getCurrentUser();
 
   return `
     <aside class="sidebar" id="sidebar">
@@ -50,15 +55,15 @@ export function renderSidebar() {
       </nav>
 
       <div class="sidebar-footer">
-        <div class="user-pill">
+        <div class="user-pill" onclick="window.handleLogout()" title="Clique para sair">
           <div class="user-avatar">
             <i class="fa-solid fa-user"></i>
           </div>
           <div class="user-info">
-            <div class="user-info-name">Administrador</div>
-            <div class="user-info-role">Sistema MDF-e</div>
+            <div class="user-info-name">${user?.nome || 'Usuário'}</div>
+            <div class="user-info-role">${user?.role === 'admin' ? 'Administrador' : 'Operador'}</div>
           </div>
-          <i class="fa-solid fa-ellipsis-vertical" style="color: var(--text-muted)"></i>
+          <i class="fa-solid fa-right-from-bracket" style="color: var(--text-muted)"></i>
         </div>
       </div>
     </aside>

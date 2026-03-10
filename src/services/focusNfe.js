@@ -4,7 +4,7 @@
 // Handles all communication with Focus NFe API
 // through the local proxy server.
 
-const PROXY_URL = '/api/focus?path=';
+const PROXY_URL = '/api/focus';
 
 function getConfig() {
     try {
@@ -46,7 +46,7 @@ async function request(method, path, body = null) {
         options.body = JSON.stringify(body);
     }
 
-    const resp = await fetch(`${PROXY_URL}${encodeURIComponent(path)}`, options);
+    const resp = await fetch(`${PROXY_URL}${path}`, options);
     const contentType = resp.headers.get('content-type') || '';
 
     // Trata respostas JSON
