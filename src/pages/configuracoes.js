@@ -1,0 +1,83 @@
+import { getConfigData, saveConfig, isConfigured } from '../services/focusNfe.js';
+import { showToast } from '../components/toast.js';
+
+export function renderConfiguracoes() {
+    const cfg = getConfigData();
+    const content = document.getElementById('page-content');
+    content.innerHTML = `<div class="fade-in">
+    <div class="page-header"><h2><i class="fa-solid fa-gear" style="color:var(--primary-400);margin-right:10px"></i>Configurações</h2><p>Configure a integração com a API Focus NFe para comunicação com a SEFAZ</p></div>
+    
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="card">
+        <div class="card-header"><h3><i class="fa-solid fa-key" style="color:var(--warning);margin-right:8px"></i>API Focus NFe</h3></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Token da API *</label>
+            <input type="password" class="form-control" id="cfg-token" value="${cfg.token}" placeholder="Cole aqui seu token da Focus NFe">
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Obtenha seu token em <a href="https://app.focusnfe.com.br" target="_blank">app.focusnfe.com.br</a></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ambiente *</label>
+            <select class="form-control form-select" id="cfg-ambiente">
+              <option value="homologacao" ${cfg.ambiente === 'homologacao' ? 'selected' : ''}>🧪 Homologação (Testes)</option>
+              <option value="producao" ${cfg.ambiente === 'producao' ? 'selected' : ''}>🔴 Produção (Real)</option>
+            </select>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Use Homologação para testes antes de ir para Produção</div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:20px">
+            <button class="btn btn-primary" id="save-config"><i class="fa-solid fa-check"></i> Salvar</button>
+            <button class="btn btn-secondary" id="test-config"><i class="fa-solid fa-wifi"></i> Testar Conexão</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3><i class="fa-solid fa-circle-info" style="color:var(--info);margin-right:8px"></i>Status da Integração</h3></div>
+        <div class="card-body">
+          <div style="padding:20px;text-align:center">
+            <div id="status-icon" style="font-size:3rem;margin-bottom:12px">${isConfigured() ? '<i class="fa-solid fa-circle-check" style="color:var(--success)"></i>' : '<i class="fa-solid fa-circle-xmark" style="color:var(--danger)"></i>'}</div>
+            <h4 id="status-text" style="margin-bottom:6px">${isConfigured() ? 'API Configurada' : 'API Não Configurada'}</h4>
+            <p id="status-desc" style="color:var(--text-muted);font-size:0.85rem">${isConfigured() ? 'O sistema está pronto para emitir MDF-e na SEFAZ via Focus NFe.' : 'Configure o token da API para poder emitir MDF-e na SEFAZ.'}</p>
+            <div style="margin-top:16px;padding:14px;background:rgba(99,102,241,0.06);border-radius:var(--radius-md);border:1px solid rgba(99,102,241,0.12);text-align:left">
+              <div style="font-size:0.78rem;font-weight:600;color:var(--primary-300);margin-bottom:8px">Ambiente atual:</div>
+              <span class="badge ${cfg.ambiente === 'producao' ? 'badge-danger' : 'badge-warning'}">${cfg.ambiente === 'producao' ? '🔴 Produção' : '🧪 Homologação'}</span>
+            </div>
+          </div>
+          
+          <div style="margin-top:20px;padding:16px;background:rgba(251,191,36,0.06);border-radius:var(--radius-md);border:1px solid rgba(251,191,36,0.15)">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><i class="fa-solid fa-triangle-exclamation" style="color:var(--warning)"></i><span style="font-size:0.82rem;font-weight:600;color:var(--warning)">Importante</span></div>
+            <ul style="font-size:0.78rem;color:var(--text-secondary);padding-left:16px;line-height:1.8">
+              <li>Inicie o servidor proxy: <code style="background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px">node server.js</code></li>
+              <li>A empresa deve estar credenciada na Focus NFe</li>
+              <li>Teste primeiro em Homologação antes de usar Produção</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+    document.getElementById('save-config').addEventListener('click', () => {
+        const token = document.getElementById('cfg-token').value.trim();
+        const ambiente = document.getElementById('cfg-ambiente').value;
+        if (!token) { showToast('Informe o token da API', 'error'); return; }
+        saveConfig({ token, ambiente });
+        showToast('Configurações salvas!', 'success');
+        renderConfiguracoes();
+    });
+
+    document.getElementById('test-config').addEventListener('click', async () => {
+        const token = document.getElementById('cfg-token').value.trim();
+        if (!token) { showToast('Informe o token primeiro', 'error'); return; }
+        try {
+            const resp = await fetch('http://localhost:3456/api/health');
+            if (resp.ok) {
+                showToast('Proxy conectado! Servidor rodando.', 'success');
+            } else {
+                showToast('Servidor proxy não respondeu corretamente', 'error');
+            }
+        } catch {
+            showToast('Servidor proxy não encontrado. Execute: node server.js', 'error');
+        }
+    });
+}
