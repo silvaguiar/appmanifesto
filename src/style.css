@@ -1345,3 +1345,6 @@ textarea.form-control {
   font-size: 0.75rem;
   color: var(--text-muted);
 }
+
+.stat-card.danger::after { background: var(--danger); }
+.stat-card.danger .stat-card-icon { background: var(--danger-bg); color: var(--danger); }

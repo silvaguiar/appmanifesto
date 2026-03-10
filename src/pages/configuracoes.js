@@ -120,6 +120,33 @@ export function renderConfiguracoes() {
         </div>
       </div>
     </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-header">
+        <h3><i class="fa-solid fa-key" style="color:var(--warning);margin-right:8px"></i>Alterar Senha de Usuário</h3>
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:14px;align-items:flex-end">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Usuário</label>
+            <select class="form-control form-select" id="pwd-user-select">
+              ${getUsers().map(u => `<option value="${u.id}">${u.nome} (${u.login})</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Nova Senha</label>
+            <input type="password" class="form-control" id="pwd-new" placeholder="Nova senha">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Confirmar Senha</label>
+            <input type="password" class="form-control" id="pwd-confirm" placeholder="Confirme a senha">
+          </div>
+          <button class="btn btn-warning" id="save-password" style="margin-bottom:0">
+            <i class="fa-solid fa-key"></i> Alterar
+          </button>
+        </div>
+      </div>
+    </div>
   </div>`;
 
     document.getElementById('save-config').addEventListener('click', () => {
@@ -172,5 +199,20 @@ export function renderConfiguracoes() {
                 renderConfiguracoes();
             }
         });
+    });
+
+    document.getElementById('save-password').addEventListener('click', () => {
+        const id = document.getElementById('pwd-user-select').value;
+        const nova = document.getElementById('pwd-new').value.trim();
+        const conf = document.getElementById('pwd-confirm').value.trim();
+
+        if (!nova || !conf) { showToast('Preencha os dois campos de senha', 'error'); return; }
+        if (nova !== conf) { showToast('As senhas não coincidem', 'error'); return; }
+        if (nova.length < 4) { showToast('A senha deve ter no mínimo 4 caracteres', 'error'); return; }
+
+        saveUser({ id, senha: nova });
+        showToast('Senha alterada com sucesso!', 'success');
+        document.getElementById('pwd-new').value = '';
+        document.getElementById('pwd-confirm').value = '';
     });
 }
