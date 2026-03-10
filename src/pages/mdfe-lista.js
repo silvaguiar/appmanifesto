@@ -9,6 +9,12 @@ let filterStatus = 'todos';
 let searchTerm = '';
 
 export function renderMDFeLista() {
+  // Check if a filter was set by the dashboard cards
+  if (window.mdfeFilter) {
+    filterStatus = window.mdfeFilter;
+    window.mdfeFilter = null; // consume it
+  }
+
   const content = document.getElementById('page-content');
   let mdfes = getMDFes().sort((a, b) => new Date(b.criadoEm) - new Date(a.criadoEm));
 

@@ -3,6 +3,12 @@
 // ============================================
 
 import { getEstatisticas, getMDFes, getMotoristaById, getVeiculoById } from '../store/dataStore.js';
+import { navigate } from '../router.js';
+
+function goToLista(filter) {
+  window.mdfeFilter = filter || 'todos';
+  navigate('/mdfe-lista');
+}
 
 export function renderDashboard() {
     const stats = getEstatisticas();
@@ -17,7 +23,7 @@ export function renderDashboard() {
       </div>
 
       <div class="stats-grid">
-        <div class="stat-card primary">
+        <div class="stat-card primary" onclick="window.goToLista('todos')" style="cursor:pointer" title="Ver todos os MDF-e">
           <div class="stat-card-icon">
             <i class="fa-solid fa-file-lines"></i>
           </div>
@@ -25,7 +31,7 @@ export function renderDashboard() {
           <div class="stat-card-label">Total de MDF-e</div>
         </div>
         
-        <div class="stat-card success">
+        <div class="stat-card success" onclick="window.goToLista('autorizado')" style="cursor:pointer" title="Ver autorizados">
           <div class="stat-card-icon">
             <i class="fa-solid fa-circle-check"></i>
           </div>
@@ -33,7 +39,7 @@ export function renderDashboard() {
           <div class="stat-card-label">Autorizados</div>
         </div>
         
-        <div class="stat-card warning">
+        <div class="stat-card warning" onclick="window.goToLista('encerrado')" style="cursor:pointer" title="Ver encerrados">
           <div class="stat-card-icon">
             <i class="fa-solid fa-lock"></i>
           </div>
@@ -41,12 +47,12 @@ export function renderDashboard() {
           <div class="stat-card-label">Encerrados</div>
         </div>
 
-        <div class="stat-card info">
+        <div class="stat-card danger" onclick="window.goToLista('erro_autorizacao')" style="cursor:pointer" title="Ver MDF-e rejeitados">
           <div class="stat-card-icon">
-            <i class="fa-solid fa-users"></i>
+            <i class="fa-solid fa-triangle-exclamation"></i>
           </div>
-          <div class="stat-card-value">${stats.totalMotoristas}</div>
-          <div class="stat-card-label">Motoristas Ativos</div>
+          <div class="stat-card-value">${stats.rejeicoes}</div>
+          <div class="stat-card-label">Com Rejeição</div>
         </div>
       </div>
 
@@ -126,6 +132,9 @@ export function renderDashboard() {
       </div>
     </div>
   `;
+
+  // Expose globally for onclick handlers inside template strings
+  window.goToLista = goToLista;
 }
 
 function getStatusBadge(status) {

@@ -184,6 +184,7 @@ export function getEstatisticas() {
         autorizados: mdfes.filter(m => m.status === 'autorizado').length,
         encerrados: mdfes.filter(m => m.status === 'encerrado').length,
         cancelados: mdfes.filter(m => m.status === 'cancelado').length,
+        rejeicoes: mdfes.filter(m => m.status === 'erro_autorizacao').length,
         totalMotoristas: motoristas.filter(m => m.ativo !== false).length,
         totalVeiculos: veiculos.filter(v => v.ativo !== false).length,
     };
