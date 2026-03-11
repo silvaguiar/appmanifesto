@@ -87,9 +87,10 @@ export async function renderConfiguracoes() {
                   <td><span class="badge ${user.role === 'admin' ? 'badge-primary' : 'badge-info'}">${user.role === 'admin' ? 'Admin' : 'Padrão'}</span></td>
                   <td>
                     <div class="actions">
+                      <button class="btn btn-sm btn-info edit-user" data-id="${user.id}" title="Editar"><i class="fa-solid fa-pen-to-square"></i></button>
                       ${user.login !== 'TI' ? `
                         <button class="btn btn-sm btn-danger delete-user" data-id="${user.id}" title="Excluir"><i class="fa-solid fa-trash"></i></button>
-                      ` : '<span style="font-size:0.7rem;color:var(--text-muted)">Protegido</span>'}
+                      ` : '<span style="font-size:0.7rem;color:var(--text-muted);margin-left:8px">Protegido</span>'}
                     </div>
                   </td>
                 </tr>
@@ -99,7 +100,8 @@ export async function renderConfiguracoes() {
         </div>
         
         <div style="margin-top:20px;padding:20px;background:rgba(255,255,255,0.03);border-radius:var(--radius-md);border:1px solid var(--border-color)">
-          <h4 style="margin-bottom:12px;font-size:0.9rem">Criar Novo Usuário</h4>
+          <h4 id="user-form-title" style="margin-bottom:12px;font-size:0.9rem">Criar Novo Usuário</h4>
+          <input type="hidden" id="edit-user-id">
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Nome Completo</label>
@@ -114,6 +116,7 @@ export async function renderConfiguracoes() {
             <div class="form-group">
               <label class="form-label">Senha</label>
               <input type="password" class="form-control" id="new-user-senha" placeholder="Senha de acesso">
+              <div id="edit-pwd-note" style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;display:none">Deixe em branco para manter a senha atual</div>
             </div>
             <div class="form-group">
               <label class="form-label">Cargo</label>
@@ -123,7 +126,10 @@ export async function renderConfiguracoes() {
               </select>
             </div>
           </div>
-          <button class="btn btn-primary" id="add-user"><i class="fa-solid fa-plus"></i> Criar Usuário</button>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-primary" id="add-user"><i class="fa-solid fa-plus"></i> Criar Usuário</button>
+            <button class="btn btn-secondary" id="cancel-edit" style="display:none">Cancelar</button>
+          </div>
         </div>
       </div>
     </div>
@@ -182,23 +188,62 @@ export async function renderConfiguracoes() {
 
   // User management handlers
   document.getElementById('add-user').addEventListener('click', async () => {
+    const id = document.getElementById('edit-user-id').value;
     const nome = document.getElementById('new-user-nome').value.trim();
     const login = document.getElementById('new-user-login').value.trim();
     const senha = document.getElementById('new-user-senha').value.trim();
     const role = document.getElementById('new-user-role').value;
 
-    if (!nome || !login || !senha) {
-      showToast('Preencha todos os campos do novo usuário', 'error');
+    if (!nome || !login || (!id && !senha)) {
+      showToast('Preencha os campos obrigatórios', 'error');
       return;
     }
 
     const btn = document.getElementById('add-user');
     btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Criando...';
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${id ? 'Salvando...' : 'Criando...'}`;
 
-    await saveUser({ nome, login, senha, role });
-    showToast('Usuário criado com sucesso!', 'success');
+    const userData = { nome, login, role };
+    if (id) userData.id = id;
+    if (senha) userData.senha = senha;
+
+    await saveUser(userData);
+    showToast(id ? 'Usuário atualizado!' : 'Usuário criado!', 'success');
     renderConfiguracoes();
+  });
+
+  document.querySelectorAll('.edit-user').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      const user = users.find(u => u.id === id);
+      if (!user) return;
+
+      document.getElementById('edit-user-id').value = user.id;
+      document.getElementById('new-user-nome').value = user.nome;
+      document.getElementById('new-user-login').value = user.login;
+      document.getElementById('new-user-senha').value = '';
+      document.getElementById('new-user-role').value = user.role;
+
+      document.getElementById('user-form-title').innerText = 'Editar Usuário';
+      document.getElementById('add-user').innerHTML = '<i class="fa-solid fa-check"></i> Salvar Alterações';
+      document.getElementById('cancel-edit').style.display = 'block';
+      document.getElementById('edit-pwd-note').style.display = 'block';
+      
+      document.getElementById('new-user-nome').focus();
+    });
+  });
+
+  document.getElementById('cancel-edit').addEventListener('click', () => {
+    document.getElementById('edit-user-id').value = '';
+    document.getElementById('new-user-nome').value = '';
+    document.getElementById('new-user-login').value = '';
+    document.getElementById('new-user-senha').value = '';
+    document.getElementById('new-user-role').value = 'user';
+
+    document.getElementById('user-form-title').innerText = 'Criar Novo Usuário';
+    document.getElementById('add-user').innerHTML = '<i class="fa-solid fa-plus"></i> Criar Usuário';
+    document.getElementById('cancel-edit').style.display = 'none';
+    document.getElementById('edit-pwd-note').style.display = 'none';
   });
 
   document.querySelectorAll('.delete-user').forEach(btn => {
