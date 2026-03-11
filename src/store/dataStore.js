@@ -12,7 +12,20 @@ export async function getMotoristas() {
 }
 
 export async function saveMotorista(motorista) {
-    const record = {
+    const record = buildMotoristaRecord(motorista);
+    if (motorista.id) {
+        const { data, error } = await supabase.from('motoristas').update(record).eq('id', motorista.id).select().single();
+        if (error) throw new Error(error.message);
+        return mapMotorista(data);
+    } else {
+        const { data, error } = await supabase.from('motoristas').insert(record).select().single();
+        if (error) throw new Error(error.message);
+        return mapMotorista(data);
+    }
+}
+
+function buildMotoristaRecord(motorista) {
+    return {
         nome: motorista.nome,
         cpf: motorista.cpf,
         telefone: motorista.telefone,
@@ -21,16 +34,14 @@ export async function saveMotorista(motorista) {
         uf: motorista.uf,
         ativo: motorista.ativo !== false
     };
-    if (motorista.id) {
-        const { data } = await supabase.from('motoristas').update(record).eq('id', motorista.id).select().single();
-        return mapMotorista(data);
-    } else {
-        const { data } = await supabase.from('motoristas').insert(record).select().single();
-        return mapMotorista(data);
-    }
 }
 
 export async function deleteMotorista(id) {
+    // Check if motorista is in use by any MDFe
+    const { count, error } = await supabase.from('mdfes').select('*', { count: 'exact', head: true }).eq('motorista_id', id);
+    if (error) throw new Error(error.message);
+    if (count > 0) throw new Error('Este motorista não pode ser excluído pois está vinculado a manifestos emitidos.');
+
     await supabase.from('motoristas').delete().eq('id', id);
 }
 
@@ -51,7 +62,20 @@ export async function getVeiculos() {
 }
 
 export async function saveVeiculo(veiculo) {
-    const record = {
+    const record = buildVeiculoRecord(veiculo);
+    if (veiculo.id) {
+        const { data, error } = await supabase.from('veiculos').update(record).eq('id', veiculo.id).select().single();
+        if (error) throw new Error(error.message);
+        return mapVeiculo(data);
+    } else {
+        const { data, error } = await supabase.from('veiculos').insert(record).select().single();
+        if (error) throw new Error(error.message);
+        return mapVeiculo(data);
+    }
+}
+
+function buildVeiculoRecord(veiculo) {
+    return {
         placa: veiculo.placa,
         uf: veiculo.uf,
         tipo_rodado: veiculo.tipoRodado || veiculo.tipo_rodado,
@@ -62,16 +86,14 @@ export async function saveVeiculo(veiculo) {
         renavam: veiculo.renavam,
         ativo: veiculo.ativo !== false
     };
-    if (veiculo.id) {
-        const { data } = await supabase.from('veiculos').update(record).eq('id', veiculo.id).select().single();
-        return mapVeiculo(data);
-    } else {
-        const { data } = await supabase.from('veiculos').insert(record).select().single();
-        return mapVeiculo(data);
-    }
 }
 
 export async function deleteVeiculo(id) {
+    // Check if veiculo is in use by any MDFe
+    const { count, error } = await supabase.from('mdfes').select('*', { count: 'exact', head: true }).eq('veiculo_id', id);
+    if (error) throw new Error(error.message);
+    if (count > 0) throw new Error('Este veículo não pode ser excluído pois está vinculado a manifestos emitidos.');
+
     await supabase.from('veiculos').delete().eq('id', id);
 }
 
@@ -99,17 +121,21 @@ export async function saveMDFe(mdfe) {
         return mapMDFe(data);
     } else {
         // Get next number from sequence
-        const { data: seqData } = await supabase.rpc('nextval', { seq_name: 'mdfe_numero_seq' });
+        const { data: seqData, error: seqError } = await supabase.rpc('nextval', { seq_name: 'mdfe_numero_seq' });
+        if (seqError) throw new Error(`Falha ao obter número do MDF-e: ${seqError.message}`);
+        
         const numero = seqData || Date.now();
-        const record = {
+        const empresa = await getEmpresa();
+        
+        const insertRecord = {
             ...buildMDFeRecord(mdfe),
             numero: numero,
             serie: '1',
             status: 'processando_autorizacao',
-            chave_acesso: gerarChaveAcesso(numero),
+            chave_acesso: gerarChaveAcesso(numero, empresa),
             dt_emissao: new Date().toISOString()
         };
-        const { data, error } = await supabase.from('mdfes').insert(record).select().single();
+        const { data, error } = await supabase.from('mdfes').insert(insertRecord).select().single();
         if (error) throw new Error(error.message);
         return mapMDFe(data);
     }
@@ -186,18 +212,30 @@ function mapMDFe(row) {
     };
 }
 
-function gerarChaveAcesso(numero) {
-    const uf = '35';
-    const aamm = new Date().toISOString().slice(2, 4) + new Date().toISOString().slice(5, 7);
-    const cnpj = '00000000000000';
+function gerarChaveAcesso(numero, empresa, serie = '1') {
+    const ufStr = empresa.uf_ibge || '35'; // Default SP
+    const now = new Date();
+    const aamm = now.toISOString().slice(2, 4) + now.toISOString().slice(5, 7);
+    const cnpj = (empresa.cnpj || '00000000000000').replace(/\D/g, '').padStart(14, '0');
     const mod = '58';
-    const serie = '001';
-    const num = String(numero).padStart(9, '0');
+    const serieStr = String(serie).padStart(3, '0');
+    const nMDF = String(numero).padStart(9, '0');
     const tpEmis = '1';
-    const cNF = String(Math.floor(Math.random() * 99999999)).padStart(8, '0');
-    const base = uf + aamm + cnpj + mod + serie + num + tpEmis + cNF;
-    const dv = String(Math.floor(Math.random() * 10));
-    return (base + dv).slice(0, 44);
+    const cMDF = String(Math.floor(Math.random() * 99999999)).padStart(8, '0');
+    
+    const base = ufStr + aamm + cnpj + mod + serieStr + nMDF + tpEmis + cMDF;
+    
+    // Modulo 11 check digit
+    let soma = 0;
+    let peso = 2;
+    for (let i = base.length - 1; i >= 0; i--) {
+        soma += parseInt(base[i]) * peso;
+        peso = peso === 9 ? 2 : peso + 1;
+    }
+    const resto = soma % 11;
+    const dv = (resto === 0 || resto === 1) ? 0 : 11 - resto;
+    
+    return base + dv;
 }
 
 // ---- Empresa Emitente ----
@@ -221,10 +259,12 @@ export async function saveEmpresa(empresa) {
     // Check if exists
     const { data: existing } = await supabase.from('empresa').select('id').limit(1).single();
     if (existing) {
-        const { data } = await supabase.from('empresa').update(record).eq('id', existing.id).select().single();
+        const { data, error } = await supabase.from('empresa').update(record).eq('id', existing.id).select().single();
+        if (error) throw new Error(error.message);
         return mapEmpresa(data);
     } else {
-        const { data } = await supabase.from('empresa').insert(record).select().single();
+        const { data, error } = await supabase.from('empresa').insert(record).select().single();
+        if (error) throw new Error(error.message);
         return mapEmpresa(data);
     }
 }
@@ -236,19 +276,41 @@ function mapEmpresa(row) {
 
 // ---- Estatísticas ----
 export async function getEstatisticas() {
-    const mdfes = await getMDFes();
-    const motoristas = await getMotoristas();
-    const veiculos = await getVeiculos();
+    try {
+        const [
+            { count: totalMDFe },
+            { count: autorizados },
+            { count: encerrados },
+            { count: cancelados },
+            { count: rejeicoes },
+            { count: totalMotoristas },
+            { count: totalVeiculos }
+        ] = await Promise.all([
+            supabase.from('mdfes').select('*', { count: 'exact', head: true }),
+            supabase.from('mdfes').select('*', { count: 'exact', head: true }).eq('status', 'autorizado'),
+            supabase.from('mdfes').select('*', { count: 'exact', head: true }).eq('status', 'encerrado'),
+            supabase.from('mdfes').select('*', { count: 'exact', head: true }).eq('status', 'cancelado'),
+            supabase.from('mdfes').select('*', { count: 'exact', head: true }).eq('status', 'erro_autorizacao'),
+            supabase.from('mdfes').select('*', { count: 'exact', head: true }).eq('ativo', true),
+            supabase.from('mdfes').select('*', { count: 'exact', head: true }).eq('ativo', true)
+        ]);
 
-    return {
-        totalMDFe: mdfes.length,
-        autorizados: mdfes.filter(m => m.status === 'autorizado').length,
-        encerrados: mdfes.filter(m => m.status === 'encerrado').length,
-        cancelados: mdfes.filter(m => m.status === 'cancelado').length,
-        rejeicoes: mdfes.filter(m => m.status === 'erro_autorizacao').length,
-        totalMotoristas: motoristas.filter(m => m.ativo !== false).length,
-        totalVeiculos: veiculos.filter(v => v.ativo !== false).length,
-    };
+        return {
+            totalMDFe: totalMDFe || 0,
+            autorizados: autorizados || 0,
+            encerrados: encerrados || 0,
+            cancelados: cancelados || 0,
+            rejeicoes: rejeicoes || 0,
+            totalMotoristas: totalMotoristas || 0,
+            totalVeiculos: totalVeiculos || 0,
+        };
+    } catch (error) {
+        console.error('Erro ao buscar estatísticas:', error);
+        return {
+            totalMDFe: 0, autorizados: 0, encerrados: 0, cancelados: 0, 
+            rejeicoes: 0, totalMotoristas: 0, totalVeiculos: 0
+        };
+    }
 }
 
 // ---- Usuários e Autenticação ----
@@ -278,8 +340,9 @@ export async function deleteUser(id) {
 
 async function hashPassword(password) {
     if (!password) return '';
+    const pepper = "MDFE_SECRET_2026"; 
     const encoder = new TextEncoder();
-    const data = encoder.encode(password);
+    const data = encoder.encode(password + pepper);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
