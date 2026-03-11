@@ -29,16 +29,16 @@ export function isConfigured() {
     return !!cfg.token;
 }
 
-async function request(method, path, body = null) {
-    const cfg = getConfig();
-    if (!cfg.token) throw new Error('Token da API Focus NFe não configurado. Vá em Configurações.');
+async function request(method, path, body = null, cfg = null) {
+    const apiCfg = cfg || getConfig();
+    if (!apiCfg.token) throw new Error('Token da API Focus NFe não configurado. Vá em Empresa > Editar Empresa para configurar.');
 
     const options = {
         method,
         headers: {
             'Content-Type': 'application/json',
-            'X-Focus-Token': cfg.token,
-            'X-Focus-Ambiente': cfg.ambiente
+            'X-Focus-Token': apiCfg.token,
+            'X-Focus-Ambiente': apiCfg.ambiente
         }
     };
 
@@ -72,46 +72,51 @@ async function request(method, path, body = null) {
  * Emitir MDF-e na SEFAZ via Focus NFe
  * @param {string} ref - Referência única (usamos o ID local)
  * @param {object} dados - Dados do MDF-e no formato Focus NFe
+ * @param {object} cfg - Configuração da empresa (token, ambiente)
  */
-export async function emitirMDFe(ref, dados) {
-    return request('POST', `/v2/mdfe?ref=${ref}`, dados);
+export async function emitirMDFe(ref, dados, cfg = null) {
+    return request('POST', `/v2/mdfe?ref=${ref}`, dados, cfg);
 }
 
 /**
  * Consultar status do MDF-e na Focus NFe
  * @param {string} ref - Referência
  * @param {boolean} completa - Se true, retorna dados completos
+ * @param {object} cfg - Configuração da empresa (token, ambiente)
  */
-export async function consultarMDFe(ref, completa = false) {
+export async function consultarMDFe(ref, completa = false, cfg = null) {
     const param = completa ? '?completa=1' : '';
-    return request('GET', `/v2/mdfe/${ref}${param}`);
+    return request('GET', `/v2/mdfe/${ref}${param}`, null, cfg);
 }
 
 /**
  * Cancelar MDF-e
  * @param {string} ref - Referência
  * @param {string} justificativa - Motivo (15-255 chars)
+ * @param {object} cfg - Configuração da empresa (token, ambiente)
  */
-export async function cancelarMDFe(ref, justificativa) {
-    return request('DELETE', `/v2/mdfe/${ref}`, { justificativa });
+export async function cancelarMDFe(ref, justificativa, cfg = null) {
+    return request('DELETE', `/v2/mdfe/${ref}`, { justificativa }, cfg);
 }
 
 /**
  * Encerrar MDF-e
  * @param {string} ref - Referência
  * @param {object} dados - { data, sigla_uf, nome_municipio }
+ * @param {object} cfg - Configuração da empresa (token, ambiente)
  */
-export async function encerrarMDFe(ref, dados) {
-    return request('POST', `/v2/mdfe/${ref}/encerrar`, dados);
+export async function encerrarMDFe(ref, dados, cfg = null) {
+    return request('POST', `/v2/mdfe/${ref}/encerrar`, dados, cfg);
 }
 
 /**
  * Incluir condutor no MDF-e
  * @param {string} ref - Referência
  * @param {object} dados - { nome, cpf }
+ * @param {object} cfg - Configuração da empresa (token, ambiente)
  */
-export async function incluirCondutor(ref, dados) {
-    return request('POST', `/v2/mdfe/${ref}/incluir_condutor`, dados);
+export async function incluirCondutor(ref, dados, cfg = null) {
+    return request('POST', `/v2/mdfe/${ref}/incluir_condutor`, dados, cfg);
 }
 
 /**

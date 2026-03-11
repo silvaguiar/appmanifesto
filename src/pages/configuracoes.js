@@ -1,9 +1,8 @@
-import { getConfigData, saveConfig, isConfigured } from '../services/focusNfe.js';
 import { showToast } from '../components/toast.js';
-import { getUsers, saveUser, deleteUser } from '../store/dataStore.js';
+import { getUsers, saveUser, deleteUser, getEmpresas, getUserEmpresas, saveUserEmpresas } from '../store/dataStore.js';
+import { formatarCNPJ, formatarCPF } from '../utils/validators.js';
 
 export async function renderConfiguracoes() {
-  const cfg = getConfigData();
   const content = document.getElementById('page-content');
 
   // Show loading state
@@ -11,59 +10,10 @@ export async function renderConfiguracoes() {
 
   // Fetch users first
   const users = await getUsers();
-
+  const empresas = await getEmpresas();
   content.innerHTML = `<div class="fade-in">
-    <div class="page-header"><h2><i class="fa-solid fa-gear" style="color:var(--primary-400);margin-right:10px"></i>Configurações</h2><p>Configure a integração com a API Focus NFe para comunicação com a SEFAZ</p></div>
+    <div class="page-header"><h2><i class="fa-solid fa-gear" style="color:var(--primary-400);margin-right:10px"></i>Configurações do Sistema</h2><p>Gerencie o acesso de usuários e permissões de empresas.</p></div>
     
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-      <div class="card">
-        <div class="card-header"><h3><i class="fa-solid fa-key" style="color:var(--warning);margin-right:8px"></i>API Focus NFe</h3></div>
-        <div class="card-body">
-          <div class="form-group">
-            <label class="form-label">Token da API *</label>
-            <input type="password" class="form-control" id="cfg-token" value="${cfg.token}" placeholder="Cole aqui seu token da Focus NFe">
-            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Obtenha seu token em <a href="https://app.focusnfe.com.br" target="_blank">app.focusnfe.com.br</a></div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Ambiente *</label>
-            <select class="form-control form-select" id="cfg-ambiente">
-              <option value="homologacao" ${cfg.ambiente === 'homologacao' ? 'selected' : ''}>🧪 Homologação (Testes)</option>
-              <option value="producao" ${cfg.ambiente === 'producao' ? 'selected' : ''}>🔴 Produção (Real)</option>
-            </select>
-            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Use Homologação para testes antes de ir para Produção</div>
-          </div>
-          <div style="display:flex;gap:10px;margin-top:20px">
-            <button class="btn btn-primary" id="save-config"><i class="fa-solid fa-check"></i> Salvar</button>
-            <button class="btn btn-secondary" id="test-config"><i class="fa-solid fa-wifi"></i> Testar Conexão</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header"><h3><i class="fa-solid fa-circle-info" style="color:var(--info);margin-right:8px"></i>Status da Integração</h3></div>
-        <div class="card-body">
-          <div style="padding:20px;text-align:center">
-            <div id="status-icon" style="font-size:3rem;margin-bottom:12px">${isConfigured() ? '<i class="fa-solid fa-circle-check" style="color:var(--success)"></i>' : '<i class="fa-solid fa-circle-xmark" style="color:var(--danger)"></i>'}</div>
-            <h4 id="status-text" style="margin-bottom:6px">${isConfigured() ? 'API Configurada' : 'API Não Configurada'}</h4>
-            <p id="status-desc" style="color:var(--text-muted);font-size:0.85rem">${isConfigured() ? 'O sistema está pronto para emitir MDF-e na SEFAZ via Focus NFe.' : 'Configure o token da API para poder emitir MDF-e na SEFAZ.'}</p>
-            <div style="margin-top:16px;padding:14px;background:rgba(99,102,241,0.06);border-radius:var(--radius-md);border:1px solid rgba(99,102,241,0.12);text-align:left">
-              <div style="font-size:0.78rem;font-weight:600;color:var(--primary-300);margin-bottom:8px">Ambiente atual:</div>
-              <span class="badge ${cfg.ambiente === 'producao' ? 'badge-danger' : 'badge-warning'}">${cfg.ambiente === 'producao' ? '🔴 Produção' : '🧪 Homologação'}</span>
-            </div>
-          </div>
-          
-          <div style="margin-top:20px;padding:16px;background:rgba(251,191,36,0.06);border-radius:var(--radius-md);border:1px solid rgba(251,191,36,0.15)">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><i class="fa-solid fa-triangle-exclamation" style="color:var(--warning)"></i><span style="font-size:0.82rem;font-weight:600;color:var(--warning)">Importante</span></div>
-            <ul style="font-size:0.78rem;color:var(--text-secondary);padding-left:16px;line-height:1.8">
-              <li>Inicie o servidor proxy: <code style="background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px">node server.js</code></li>
-              <li>A empresa deve estar credenciada na Focus NFe</li>
-              <li>Teste primeiro em Homologação antes de usar Produção</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div class="card" style="margin-top:20px">
       <div class="card-header">
         <h3><i class="fa-solid fa-users" style="color:var(--primary-400);margin-right:8px"></i>Gestão de Usuários</h3>
@@ -126,6 +76,17 @@ export async function renderConfiguracoes() {
               </select>
             </div>
           </div>
+          <div class="form-group" id="empresa-acesso-container">
+            <label class="form-label">Empresas Permitidas <span style="font-size:0.75rem;font-weight:normal;color:var(--text-muted)">(Apenas para usuários Padrão)</span></label>
+            <div style="max-height: 150px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px;">
+               ${empresas.length === 0 ? '<div style="font-size:0.8rem;color:var(--text-muted)">Nenhuma empresa cadastrada</div>' : empresas.map(emp => `
+                  <label style="display:flex; align-items:center; gap:8px; margin-bottom: 6px; cursor: pointer;">
+                    <input type="checkbox" class="user-empresa-checkbox" value="${emp.id}" style="accent-color:var(--primary-400)">
+                    <span style="font-size:0.85rem">${emp.razaoSocial} ${emp.cpf ? `(CPF: ${formatarCPF(emp.cpf)})` : `(CNPJ: ${formatarCNPJ(emp.cnpj)})`}</span>
+                  </label>
+               `).join('')}
+            </div>
+          </div>
           <div style="display:flex;gap:10px">
             <button class="btn btn-primary" id="add-user"><i class="fa-solid fa-plus"></i> Criar Usuário</button>
             <button class="btn btn-secondary" id="cancel-edit" style="display:none">Cancelar</button>
@@ -136,29 +97,17 @@ export async function renderConfiguracoes() {
 
   </div>`;
 
-  document.getElementById('save-config').addEventListener('click', () => {
-    const token = document.getElementById('cfg-token').value.trim();
-    const ambiente = document.getElementById('cfg-ambiente').value;
-    if (!token) { showToast('Informe o token da API', 'error'); return; }
-    saveConfig({ token, ambiente });
-    showToast('Configurações salvas!', 'success');
-    renderConfiguracoes();
-  });
 
-  document.getElementById('test-config').addEventListener('click', async () => {
-    const token = document.getElementById('cfg-token').value.trim();
-    if (!token) { showToast('Informe o token primeiro', 'error'); return; }
-    try {
-      const resp = await fetch('http://localhost:3456/api/health');
-      if (resp.ok) {
-        showToast('Proxy conectado! Servidor rodando.', 'success');
-      } else {
-        showToast('Servidor proxy não respondeu corretamente', 'error');
-      }
-    } catch {
-      showToast('Servidor proxy não encontrado. Execute: node server.js', 'error');
-    }
-  });
+
+  const toggleEmpresaVisibility = () => {
+    const role = document.getElementById('new-user-role').value;
+    document.getElementById('empresa-acesso-container').style.opacity = role === 'admin' ? '0.5' : '1';
+    document.querySelectorAll('.user-empresa-checkbox').forEach(cb => {
+      cb.disabled = role === 'admin';
+    });
+  };
+  document.getElementById('new-user-role').addEventListener('change', toggleEmpresaVisibility);
+  toggleEmpresaVisibility();
 
   // User management handlers
   document.getElementById('add-user').addEventListener('click', async () => {
@@ -181,7 +130,11 @@ export async function renderConfiguracoes() {
     if (id) userData.id = id;
     if (senha) userData.senha = senha;
 
-    await saveUser(userData);
+    const savedUser = await saveUser(userData);
+
+    const selectedEmpresas = Array.from(document.querySelectorAll('.user-empresa-checkbox:checked')).map(cb => cb.value);
+    await saveUserEmpresas(savedUser.id, role === 'admin' ? [] : selectedEmpresas);
+
     showToast(id ? 'Usuário atualizado!' : 'Usuário criado!', 'success');
     renderConfiguracoes();
   });
@@ -202,6 +155,14 @@ export async function renderConfiguracoes() {
       document.getElementById('add-user').innerHTML = '<i class="fa-solid fa-check"></i> Salvar Alterações';
       document.getElementById('cancel-edit').style.display = 'block';
       document.getElementById('edit-pwd-note').style.display = 'block';
+      toggleEmpresaVisibility();
+      
+      // Load selected empresas
+      getUserEmpresas(user.id).then(userEmpIds => {
+         document.querySelectorAll('.user-empresa-checkbox').forEach(cb => {
+           cb.checked = userEmpIds.includes(cb.value);
+         });
+      });
       
       document.getElementById('new-user-nome').focus();
     });
@@ -218,6 +179,9 @@ export async function renderConfiguracoes() {
     document.getElementById('add-user').innerHTML = '<i class="fa-solid fa-plus"></i> Criar Usuário';
     document.getElementById('cancel-edit').style.display = 'none';
     document.getElementById('edit-pwd-note').style.display = 'none';
+    
+    document.querySelectorAll('.user-empresa-checkbox').forEach(cb => cb.checked = false);
+    toggleEmpresaVisibility();
   });
 
   document.querySelectorAll('.delete-user').forEach(btn => {

@@ -1,4 +1,4 @@
-import { getMDFes, getMotoristaById, getVeiculoById, getMDFeById, deleteMDFe, updateMDFeStatus, getEmpresa, getMotoristas, getVeiculos } from '../store/dataStore.js';
+import { getMDFes, getMotoristaById, getVeiculoById, getMDFeById, deleteMDFe, updateMDFeStatus, getEmpresaById, getMotoristas, getVeiculos } from '../store/dataStore.js';
 import { formatarCPF, formatarChaveAcesso, UFS } from '../utils/validators.js';
 import { showToast } from '../components/toast.js';
 import * as focus from '../services/focusNfe.js';
@@ -180,9 +180,11 @@ async function doDeleteLocal(id) {
 // ---- Reprocessar MDF-e ----
 async function doReprocessar(id) {
   const m = await getMDFeById(id); if (!m) return;
+  const empresa = await getEmpresaById(m.empresaId || m.empresa_id);
 
-  if (!focus.isConfigured()) {
-    showToast('API Focus NFe não está configurada.', 'error');
+  const apiCfg = { token: empresa?.focusToken || empresa?.focus_token, ambiente: empresa?.focusAmbiente || empresa?.focus_ambiente || 'homologacao' };
+  if (!apiCfg.token) {
+    showToast('API Focus NFe não está configurada para esta empresa.', 'error');
     return;
   }
 
@@ -213,14 +215,14 @@ async function doReprocessar(id) {
     try {
       showToast('Reprocessando MDF-e...', 'info');
 
-      const empresa = await getEmpresa();
+      const empresa = await getEmpresaById(m.empresaId || m.empresa_id);
       const motorista = await getMotoristaById(m.motoristaId);
       const veiculo = await getVeiculoById(m.veiculoId);
 
       const payload = focus.montarPayloadMDFe(m, motorista, veiculo, empresa);
       const ref = m.focusRef || m.id;
 
-      const result = await focus.emitirMDFe(ref, payload);
+      const result = await focus.emitirMDFe(ref, payload, apiCfg);
 
       const updates = {
         focusRef: ref,
@@ -308,14 +310,17 @@ async function printDAMDFE(id) {
     return;
   }
 
-  if (!focus.isConfigured()) {
-    showToast('Configure a API Focus NFe para imprimir o DAMDFE', 'warning');
+  const empresa = await getEmpresaById(m.empresaId || m.empresa_id);
+  const apiCfg = { token: empresa?.focusToken || empresa?.focus_token, ambiente: empresa?.focusAmbiente || empresa?.focus_ambiente || 'homologacao' };
+
+  if (!apiCfg.token) {
+    showToast('Configure a API Focus NFe para esta empresa para imprimir o DAMDFE', 'warning');
     return;
   }
 
   try {
     showToast('Obtendo DAMDFE...', 'info');
-    const result = await focus.consultarMDFe(m.focusRef || m.id);
+    const result = await focus.consultarMDFe(m.focusRef || m.id, false, apiCfg);
     if (result.caminho_damdfe) {
       await updateMDFeStatus(id, { caminhoDAMDFE: result.caminho_damdfe });
       window.open(result.caminho_damdfe, '_blank');
@@ -330,6 +335,9 @@ async function printDAMDFE(id) {
 // ---- Encerrar MDF-e na SEFAZ ----
 async function doEncerrar(id) {
   const m = await getMDFeById(id); if (!m) return;
+  const empresa = await getEmpresaById(m.empresaId || m.empresa_id);
+  const apiCfg = { token: empresa?.focusToken || empresa?.focus_token, ambiente: empresa?.focusAmbiente || empresa?.focus_ambiente || 'homologacao' };
+  
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `<div class="modal" style="max-width:480px"><div class="modal-header"><h3><i class="fa-solid fa-lock" style="color:var(--warning);margin-right:8px"></i>Encerrar MDF-e</h3><button class="modal-close" id="close-enc"><i class="fa-solid fa-xmark"></i></button></div>
@@ -354,7 +362,7 @@ async function doEncerrar(id) {
     const mun = document.getElementById('enc-mun').value.trim();
     if (!data || !uf || !mun) { showToast('Preencha todos os campos', 'error'); return; }
 
-    if (!focus.isConfigured()) {
+    if (!apiCfg.token) {
       await updateMDFeStatus(id, { status: 'encerrado', dtEncerramento: new Date().toISOString() });
       showToast('MDF-e encerrado (local)', 'success');
       overlay.remove(); renderMDFeLista(); return;
@@ -363,7 +371,7 @@ async function doEncerrar(id) {
     try {
       const btn = document.getElementById('btn-enc-confirm');
       btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Encerrando...';
-      const result = await focus.encerrarMDFe(m.focusRef || m.id, { data, sigla_uf: uf, nome_municipio: mun });
+      const result = await focus.encerrarMDFe(m.focusRef || m.id, { data, sigla_uf: uf, nome_municipio: mun }, apiCfg);
 
       await updateMDFeStatus(id, {
         status: result.status || 'encerrado',
@@ -408,7 +416,7 @@ async function doCancelar(id) {
     const just = document.getElementById('canc-just').value.trim();
     if (just.length < 15) { showToast('Justificativa deve ter no mínimo 15 caracteres', 'error'); return; }
 
-    if (!focus.isConfigured()) {
+    if (!apiCfg.token) {
       await updateMDFeStatus(id, { status: 'cancelado', dtCancelamento: new Date().toISOString() });
       showToast('MDF-e cancelado (local)', 'warning');
       overlay.remove(); renderMDFeLista(); return;
@@ -417,7 +425,7 @@ async function doCancelar(id) {
     try {
       const btn = document.getElementById('btn-canc-confirm');
       btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cancelando...';
-      const result = await focus.cancelarMDFe(m.focusRef || m.id, just);
+      const result = await focus.cancelarMDFe(m.focusRef || m.id, just, apiCfg);
 
       await updateMDFeStatus(id, {
         status: result.status || 'cancelado',
@@ -439,11 +447,15 @@ async function doCancelar(id) {
 // ---- Refresh (consultar status) ----
 async function refreshStatus(id) {
   const m = await getMDFeById(id); if (!m) return;
-  if (!focus.isConfigured()) { showToast('Configure a API Focus NFe', 'warning'); return; }
+  
+  const empresa = await getEmpresaById(m.empresaId || m.empresa_id);
+  const apiCfg = { token: empresa?.focusToken || empresa?.focus_token, ambiente: empresa?.focusAmbiente || empresa?.focus_ambiente || 'homologacao' };
+  
+  if (!apiCfg.token) { showToast('Configure a API Focus NFe na empresa para consultar status.', 'warning'); return; }
 
   try {
     showToast('Consultando SEFAZ...', 'info');
-    const result = await focus.consultarMDFe(m.focusRef || m.id);
+    const result = await focus.consultarMDFe(m.focusRef || m.id, false, apiCfg);
 
     await updateMDFeStatus(id, {
       status: result.status,
@@ -539,7 +551,9 @@ async function doManutencao(id) {
       infoComplementar: document.getElementById('man-info').value
     };
 
-    if (!focus.isConfigured()) {
+    const apiCfg = { token: empresa?.focusToken || empresa?.focus_token, ambiente: empresa?.focusAmbiente || empresa?.focus_ambiente || 'homologacao' };
+
+    if (!apiCfg.token) {
       await updateMDFeStatus(id, { ...dataUpdates, status: 'autorizado' });
       showToast('MDF-e atualizado (local)', 'success');
       overlay.remove(); renderMDFeLista(); return;
@@ -549,7 +563,7 @@ async function doManutencao(id) {
       const btn = document.getElementById('btn-man-reenviar');
       btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reenviando...';
 
-      const empresa = await getEmpresa();
+      const empresa = await getEmpresaById(m.empresaId || m.empresa_id);
       const motorista = await getMotoristaById(m.motoristaId);
       const veiculo = await getVeiculoById(m.veiculoId);
 
@@ -557,7 +571,7 @@ async function doManutencao(id) {
 
       // Reenviar com mesma ref (Focus permite para erro_autorizacao)
       const ref = m.focusRef || m.id;
-      const result = await focus.emitirMDFe(ref, payload);
+      const result = await focus.emitirMDFe(ref, payload, apiCfg);
 
       await updateMDFeStatus(id, {
         ...dataUpdates,

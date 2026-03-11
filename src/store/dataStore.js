@@ -125,15 +125,17 @@ export async function saveMDFe(mdfe) {
         if (seqError) throw new Error(`Falha ao obter número do MDF-e: ${seqError.message}`);
         
         const numero = seqData || Date.now();
-        const empresa = await getEmpresa();
-        
+        const empresa = await getEmpresaById(mdfe.empresaId || mdfe.empresa_id);
+        if (!empresa) throw new Error("Empresa emitente não informada ou inválida");
+
         const insertRecord = {
             ...buildMDFeRecord(mdfe),
             numero: numero,
             serie: '1',
             status: 'processando_autorizacao',
-            chave_acesso: gerarChaveAcesso(numero, empresa),
-            dt_emissao: new Date().toISOString()
+            chave_acesso: gerarChaveAcesso(numero, empresa, '1'),
+            dt_emissao: new Date().toISOString(),
+            empresa_id: mdfe.empresaId || mdfe.empresa_id
         };
         const { data, error } = await supabase.from('mdfes').insert(insertRecord).select().single();
         if (error) throw new Error(error.message);
@@ -208,7 +210,8 @@ function mapMDFe(row) {
         focusRef: row.focus_ref, caminhoDAMDFE: row.caminho_damdfe, caminhoXml: row.caminho_xml,
         emitidoPor: row.emitido_por,
         dtEmissao: row.dt_emissao, dtEncerramento: row.dt_encerramento,
-        dtCancelamento: row.dt_cancelamento, criadoEm: row.criado_em
+        dtCancelamento: row.dt_cancelamento, criadoEm: row.criado_em,
+        empresaId: row.empresa_id
     };
 }
 
@@ -239,9 +242,15 @@ function gerarChaveAcesso(numero, empresa, serie = '1') {
 }
 
 // ---- Empresa Emitente ----
-export async function getEmpresa() {
-    const { data } = await supabase.from('empresa').select('*').limit(1).single();
-    return data ? mapEmpresa(data) : {};
+export async function getEmpresas() {
+    const { data, error } = await supabase.from('empresa').select('*').order('id');
+    if (error) { console.error(error); return []; }
+    return (data || []).map(mapEmpresa);
+}
+
+export async function getEmpresaById(id) {
+    const { data } = await supabase.from('empresa').select('*').eq('id', id).single();
+    return data ? mapEmpresa(data) : null;
 }
 
 export async function saveEmpresa(empresa) {
@@ -249,17 +258,22 @@ export async function saveEmpresa(empresa) {
         razao_social: empresa.razaoSocial || empresa.razao_social,
         nome_fantasia: empresa.nomeFantasia || empresa.nome_fantasia,
         cnpj: empresa.cnpj,
+        cpf: empresa.cpf,
         ie: empresa.ie,
         uf: empresa.uf,
         municipio: empresa.municipio,
+        cod_municipio: empresa.codMunicipio || empresa.cod_municipio,
+        tipo_transporte: empresa.tipoTransporte || empresa.tipo_transporte,
+        rntrc: empresa.rntrc,
         telefone: empresa.telefone,
         endereco: empresa.endereco,
-        cep: empresa.cep
+        cep: empresa.cep,
+        focus_token: empresa.focusToken || empresa.focus_token,
+        focus_ambiente: empresa.focusAmbiente || empresa.focus_ambiente || 'homologacao'
     };
-    // Check if exists
-    const { data: existing } = await supabase.from('empresa').select('id').limit(1).single();
-    if (existing) {
-        const { data, error } = await supabase.from('empresa').update(record).eq('id', existing.id).select().single();
+    
+    if (empresa.id) {
+        const { data, error } = await supabase.from('empresa').update(record).eq('id', empresa.id).select().single();
         if (error) throw new Error(error.message);
         return mapEmpresa(data);
     } else {
@@ -269,9 +283,22 @@ export async function saveEmpresa(empresa) {
     }
 }
 
+export async function deleteEmpresa(id) {
+    const { count, error } = await supabase.from('mdfes').select('*', { count: 'exact', head: true }).eq('empresa_id', id);
+    if (error) throw new Error(error.message);
+    if (count > 0) throw new Error('Esta empresa não pode ser excluída pois está vinculada a manifestos emitidos.');
+
+    await supabase.from('empresa').delete().eq('id', id);
+}
+
 function mapEmpresa(row) {
     if (!row) return {};
-    return { id: row.id, razaoSocial: row.razao_social, nomeFantasia: row.nome_fantasia, cnpj: row.cnpj, ie: row.ie, uf: row.uf, municipio: row.municipio, telefone: row.telefone, endereco: row.endereco, cep: row.cep };
+    return {
+        id: row.id, razaoSocial: row.razao_social, nomeFantasia: row.nome_fantasia,
+        cnpj: row.cnpj, cpf: row.cpf, ie: row.ie, uf: row.uf, municipio: row.municipio,
+        codMunicipio: row.cod_municipio, tipoTransporte: row.tipo_transporte, rntrc: row.rntrc,
+        telefone: row.telefone, endereco: row.endereco, cep: row.cep
+    };
 }
 
 // ---- Estatísticas ----
@@ -350,7 +377,22 @@ async function hashPassword(password) {
 
 export async function login(loginStr, senha) {
     const hashedSenha = await hashPassword(senha);
-    const { data } = await supabase.from('users').select('*').eq('login', loginStr).eq('senha', hashedSenha).single();
+    let { data } = await supabase.from('users').select('*').eq('login', loginStr).eq('senha', hashedSenha).single();
+    
+    // Fallback para hashes antigos (sem pepper) criados antes da atualização de segurança
+    if (!data) {
+        const encoder = new TextEncoder();
+        const oldHashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(senha));
+        const oldHashedSenha = Array.from(new Uint8Array(oldHashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+        
+        const { data: oldData } = await supabase.from('users').select('*').eq('login', loginStr).eq('senha', oldHashedSenha).single();
+        if (oldData) {
+            data = oldData;
+            // Atualiza o hash no banco para usar o novo esquema com pepper
+            await supabase.from('users').update({ senha: hashedSenha }).eq('id', data.id);
+        }
+    }
+
     if (data) {
         sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ...mapUser(data), senha: null }));
         return true;
@@ -379,3 +421,17 @@ function mapUser(row) {
     return { id: row.id, login: row.login, senha: row.senha, nome: row.nome, role: row.role, ativo: row.ativo };
 }
 
+// ---- Relacionamento Usuário <> Empresas ----
+export async function getUserEmpresas(userId) {
+    const { data, error } = await supabase.from('user_empresas').select('empresa_id').eq('user_id', userId);
+    if (error) return [];
+    return data.map(r => r.empresa_id);
+}
+
+export async function saveUserEmpresas(userId, empresaIds) {
+    await supabase.from('user_empresas').delete().eq('user_id', userId);
+    if (empresaIds && empresaIds.length > 0) {
+        const inserts = empresaIds.map(eid => ({ user_id: userId, empresa_id: eid }));
+        await supabase.from('user_empresas').insert(inserts);
+    }
+}

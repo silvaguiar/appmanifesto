@@ -1,4 +1,4 @@
-import { getMotoristas, getVeiculos, getMotoristaById, getVeiculoById, saveMDFe, getEmpresa, updateMDFeStatus, getCurrentUser } from '../store/dataStore.js';
+import { getMotoristas, getVeiculos, getMotoristaById, getVeiculoById, saveMDFe, getEmpresas, updateMDFeStatus, getCurrentUser, getUserEmpresas, getEmpresaById } from '../store/dataStore.js';
 import { UFS, formatarCPF, formatarChaveAcesso, validarChaveAcesso, TIPOS_RODADO, TIPOS_CARROCERIA } from '../utils/validators.js';
 import { showToast } from '../components/toast.js';
 import { navigate } from '../router.js';
@@ -13,6 +13,7 @@ let currentStep = 0;
 let formData = {};
 let motoristasLivre = [];
 let veiculosLivre = [];
+let empresasLivre = [];
 
 async function resetForm() {
   currentStep = 0;
@@ -22,10 +23,23 @@ async function resetForm() {
     window.mdfeDraftData = null; // consume
   } else {
     formData = {
-      ufInicio: '', ufFim: '', munCarregamento: '', munDescarregamento: '',
+      empresaId: '', ufInicio: '', ufFim: '', munCarregamento: '', munDescarregamento: '',
       codMunCarregamento: '', codMunDescarregamento: '',
       motoristaId: '', veiculoId: '', documentos: [], pesoBruto: '', valorCarga: '', infoComplementar: '', percurso: []
     };
+  }
+
+  const user = getCurrentUser();
+  const allEmpresas = await getEmpresas();
+  if (user && user.role !== 'admin') {
+      const allowedIds = await getUserEmpresas(user.id);
+      empresasLivre = allEmpresas.filter(e => allowedIds.includes(e.id));
+  } else {
+      empresasLivre = allEmpresas;
+  }
+  
+  if (empresasLivre.length === 1 && !formData.empresaId) {
+      formData.empresaId = empresasLivre[0].id;
   }
 
   // Pre-fetch data for the wizard
@@ -60,6 +74,13 @@ async function renderWizard() {
 
 async function renderStepContent(step) {
   if (step === 0) return `<div><h3 style="font-size:1.1rem;margin-bottom:20px"><i class="fa-solid fa-map-location-dot" style="color:var(--primary-300);margin-right:8px"></i>Dados Gerais</h3>
+    <div class="form-group" style="margin-bottom:20px">
+      <label class="form-label">Empresa Emitente *</label>
+      <select class="form-control form-select" id="wiz-empresa" ${empresasLivre.length === 1 ? 'disabled style="opacity:0.8;cursor:not-allowed"' : ''}>
+        <option value="">Selecione a empresa...</option>
+        ${empresasLivre.map(e => `<option value="${e.id}" ${formData.empresaId === e.id ? 'selected' : ''}>${e.razaoSocial} ${e.nomeFantasia ? `(${e.nomeFantasia})` : ''} — ${e.cpf ? formatarCPF(e.cpf) : formatarCNPJ(e.cnpj)}</option>`).join('')}
+      </select>
+    </div>
     <div class="form-row"><div class="form-group"><label class="form-label">UF Início *</label><select class="form-control form-select" id="wiz-uf-inicio"><option value="">Selecione a UF origem</option>${UFS.map(u => `<option value="${u}" ${formData.ufInicio === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div>
     <div class="form-group"><label class="form-label">UF Fim *</label><select class="form-control form-select" id="wiz-uf-fim"><option value="">Selecione a UF destino</option>${UFS.map(u => `<option value="${u}" ${formData.ufFim === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div></div>
     
@@ -120,8 +141,10 @@ async function renderStepContent(step) {
   if (step === 6) {
     const mot = motoristasLivre.find(m => m.id === formData.motoristaId);
     const veic = veiculosLivre.find(v => v.id === formData.veiculoId);
+    const emp = empresasLivre.find(e => e.id === formData.empresaId);
     return `<div><h3 style="font-size:1.1rem;margin-bottom:20px"><i class="fa-solid fa-check-double" style="color:var(--success);margin-right:8px"></i>Revisão Final</h3>
     <div class="review-section"><h4><i class="fa-solid fa-map-location-dot"></i> Dados Gerais</h4>
+      <div class="review-row"><span class="label">Emitente</span><span class="value">${emp ? emp.razaoSocial : '-'}</span></div>
       <div class="review-row"><span class="label">UF Início / Fim</span><span class="value">${formData.ufInicio} → ${formData.ufFim}</span></div>
       <div class="review-row"><span class="label">Carregamento</span><span class="value">${formData.munCarregamento}</span></div>
       <div class="review-row"><span class="label">Descarregamento</span><span class="value">${formData.munDescarregamento}</span></div></div>
@@ -202,13 +225,21 @@ function setupEvents() {
 }
 
 function saveStep() {
-  if (currentStep === 0) { formData.ufInicio = document.getElementById('wiz-uf-inicio')?.value || ''; formData.ufFim = document.getElementById('wiz-uf-fim')?.value || ''; formData.munCarregamento = document.getElementById('wiz-mun-c')?.value || ''; formData.munDescarregamento = document.getElementById('wiz-mun-d')?.value || ''; formData.codMunCarregamento = document.getElementById('wiz-cod-c')?.value || ''; formData.codMunDescarregamento = document.getElementById('wiz-cod-d')?.value || ''; }
+  if (currentStep === 0) {
+    formData.empresaId = document.getElementById('wiz-empresa')?.value || formData.empresaId || '';
+    formData.ufInicio = document.getElementById('wiz-uf-inicio')?.value || ''; 
+    formData.ufFim = document.getElementById('wiz-uf-fim')?.value || ''; 
+    formData.munCarregamento = document.getElementById('wiz-mun-c')?.value || ''; 
+    formData.munDescarregamento = document.getElementById('wiz-mun-d')?.value || ''; 
+    formData.codMunCarregamento = document.getElementById('wiz-cod-c')?.value || ''; 
+    formData.codMunDescarregamento = document.getElementById('wiz-cod-d')?.value || ''; 
+  }
   if (currentStep === 4) { formData.pesoBruto = document.getElementById('wiz-peso')?.value || ''; formData.valorCarga = document.getElementById('wiz-valor')?.value || ''; formData.infoComplementar = document.getElementById('wiz-info')?.value || ''; }
 }
 
 function validateStep() {
   saveStep();
-  if (currentStep === 0 && (!formData.ufInicio || !formData.ufFim || !formData.munCarregamento || !formData.munDescarregamento || !formData.codMunCarregamento || !formData.codMunDescarregamento)) { showToast('Preencha todos os campos incluindo código IBGE', 'error'); return false; }
+  if (currentStep === 0 && (!formData.empresaId || !formData.ufInicio || !formData.ufFim || !formData.munCarregamento || !formData.munDescarregamento || !formData.codMunCarregamento || !formData.codMunDescarregamento)) { showToast('Preencha a Empresa Emitente e demais campos, incluindo código IBGE', 'error'); return false; }
   if (currentStep === 1 && !formData.motoristaId) { showToast('Selecione um motorista', 'error'); return false; }
   if (currentStep === 2 && !formData.veiculoId) { showToast('Selecione um veículo', 'error'); return false; }
   if (currentStep === 4 && (!formData.pesoBruto || !formData.valorCarga)) { showToast('Preencha peso e valor', 'error'); return false; }
@@ -225,19 +256,26 @@ async function emitMDFe() {
     const user = getCurrentUser();
     const mdfe = await saveMDFe({ ...formData, emitidoPor: user ? user.nome : 'Sistema' });
 
-    if (!focus.isConfigured()) {
-      showToast(`MDF-e nº ${String(mdfe.numero).padStart(6, '0')} salvo no banco. Configure a API para emitir na SEFAZ.`, 'warning');
+    const currentEmpresa = await getEmpresaById(formData.empresaId);
+    if (!currentEmpresa) throw new Error('Empresa emitente inválida ou não encontrada');
+
+    const apiCfg = { token: currentEmpresa.focusToken || currentEmpresa.focus_token, ambiente: currentEmpresa.focusAmbiente || currentEmpresa.focus_ambiente || 'homologacao' };
+
+    if (!apiCfg.token) {
+      showToast(`MDF-e nº ${String(mdfe.numero).padStart(6, '0')} salvo no banco. Configure a API na empresa para emitir na SEFAZ.`, 'warning');
       setTimeout(() => navigate('/mdfe-lista'), 800);
       return;
     }
 
-    const empresa = await getEmpresa();
+    const empresa = await getEmpresaById(formData.empresaId);
+    if (!empresa) throw new Error('Empresa emitente inválida ou não encontrada');
+
     const motorista = await getMotoristaById(formData.motoristaId);
     const veiculo = await getVeiculoById(formData.veiculoId);
-    const payload = focus.montarPayloadMDFe(formData, motorista, veiculo, empresa);
+    const payload = focus.montarPayloadMDFe(formData, motorista, veiculo, currentEmpresa);
 
     const ref = mdfe.id;
-    const result = await focus.emitirMDFe(ref, payload);
+    const result = await focus.emitirMDFe(ref, payload, apiCfg);
 
     // Update Supabase record with SEFAZ response
     const updates = {
