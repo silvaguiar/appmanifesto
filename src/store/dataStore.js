@@ -94,7 +94,8 @@ export async function getMDFes() {
 export async function saveMDFe(mdfe) {
     if (mdfe.id) {
         const record = buildMDFeRecord(mdfe);
-        const { data } = await supabase.from('mdfes').update(record).eq('id', mdfe.id).select().single();
+        const { data, error } = await supabase.from('mdfes').update(record).eq('id', mdfe.id).select().single();
+        if (error) throw new Error(error.message);
         return mapMDFe(data);
     } else {
         // Get next number from sequence
@@ -108,7 +109,8 @@ export async function saveMDFe(mdfe) {
             chave_acesso: gerarChaveAcesso(numero),
             dt_emissao: new Date().toISOString()
         };
-        const { data } = await supabase.from('mdfes').insert(record).select().single();
+        const { data, error } = await supabase.from('mdfes').insert(record).select().single();
+        if (error) throw new Error(error.message);
         return mapMDFe(data);
     }
 }
@@ -127,7 +129,8 @@ function buildMDFeRecord(mdfe) {
         percurso: mdfe.percurso || [],
         peso_bruto: mdfe.pesoBruto || mdfe.peso_bruto,
         valor_carga: mdfe.valorCarga || mdfe.valor_carga,
-        info_complementar: mdfe.infoComplementar || mdfe.info_complementar
+        info_complementar: mdfe.infoComplementar || mdfe.info_complementar,
+        emitido_por: mdfe.emitidoPor || mdfe.emitido_por
     };
 }
 
@@ -177,6 +180,7 @@ function mapMDFe(row) {
         numeroSefaz: row.numero_sefaz, serieSefaz: row.serie_sefaz,
         statusSefaz: row.status_sefaz, mensagemSefaz: row.mensagem_sefaz,
         focusRef: row.focus_ref, caminhoDAMDFE: row.caminho_damdfe, caminhoXml: row.caminho_xml,
+        emitidoPor: row.emitido_por,
         dtEmissao: row.dt_emissao, dtEncerramento: row.dt_encerramento,
         dtCancelamento: row.dt_cancelamento, criadoEm: row.criado_em
     };

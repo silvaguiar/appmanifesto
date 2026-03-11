@@ -57,7 +57,7 @@ export async function renderMDFeLista() {
     </div>
     ${mdfes.length === 0 ? `<div class="card"><div class="empty-state"><i class="fa-solid fa-file-lines"></i><h4>Nenhum MDF-e encontrado</h4><p>Emita seu primeiro MDF-e ou ajuste os filtros</p></div></div>` : `
     <div class="table-container"><table class="table"><thead><tr>
-      <th>Número</th><th>Data</th><th>Motorista</th><th>Veículo</th><th>Rota</th><th>Valor</th><th>Status</th><th style="width:200px">Ações</th>
+      <th>Número</th><th>Data</th><th>Motorista</th><th>Veículo</th><th>Rota</th><th>Valor</th><th>Emitido por</th><th>Status</th><th style="width:200px">Ações</th>
     </tr></thead><tbody>
       ${mdfes.map(m => {
     const mot = cacheMotoristas.find(x => x.id === m.motoristaId);
@@ -70,6 +70,7 @@ export async function renderMDFeLista() {
           <td style="font-family:monospace">${veic ? veic.placa : '-'}</td>
           <td>${m.ufInicio} → ${m.ufFim}</td>
           <td>R$ ${Number(m.valorCarga || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+          <td style="font-size:0.75rem;color:var(--text-muted)">${m.emitidoPor || '-'}</td>
           <td>${getStatusBadge(m.status)}</td>
           <td><div class="actions">
             ${m.status === 'erro_autorizacao' || m.status === 'encerrado' || m.status === 'cancelado' || m.status === 'autorizado' || m.status === 'processando_autorizacao' ? `
@@ -285,6 +286,7 @@ async function viewMDFe(id) {
         <div class="detail-item"><div class="detail-item-label">Veículo</div><div class="detail-item-value">${veic ? veic.placa : '-'}</div></div>
         <div class="detail-item"><div class="detail-item-label">Peso Bruto</div><div class="detail-item-value">${Number(m.pesoBruto || 0).toLocaleString('pt-BR')} kg</div></div>
         <div class="detail-item"><div class="detail-item-label">Valor Carga</div><div class="detail-item-value">R$ ${Number(m.valorCarga || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div></div>
+        <div class="detail-item"><div class="detail-item-label">Emitido por</div><div class="detail-item-value">${m.emitidoPor || '-'}</div></div>
         ${m.statusSefaz ? `<div class="detail-item"><div class="detail-item-label">Status SEFAZ</div><div class="detail-item-value">${m.statusSefaz} - ${m.mensagemSefaz || ''}</div></div>` : ''}
       </div>
       ${(m.documentos || []).length > 0 ? `<div style="margin-top:20px"><h4 style="font-size:0.85rem;color:var(--text-accent);margin-bottom:10px">Documentos Vinculados</h4><div class="doc-list">${m.documentos.map(d => `<div class="doc-item"><span class="badge ${d.tipo === 'nfe' ? 'badge-primary' : 'badge-info'}">${d.tipo.toUpperCase()}</span><span class="doc-item-key">${formatarChaveAcesso(d.chave)}</span></div>`).join('')}</div></div>` : ''}

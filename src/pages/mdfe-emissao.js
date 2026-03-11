@@ -1,4 +1,4 @@
-import { getMotoristas, getVeiculos, getMotoristaById, getVeiculoById, saveMDFe, getEmpresa, updateMDFeStatus } from '../store/dataStore.js';
+import { getMotoristas, getVeiculos, getMotoristaById, getVeiculoById, saveMDFe, getEmpresa, updateMDFeStatus, getCurrentUser } from '../store/dataStore.js';
 import { UFS, formatarCPF, formatarChaveAcesso, validarChaveAcesso, TIPOS_RODADO, TIPOS_CARROCERIA } from '../utils/validators.js';
 import { showToast } from '../components/toast.js';
 import { navigate } from '../router.js';
@@ -222,7 +222,8 @@ async function emitMDFe() {
 
   // Save in Supabase first
   try {
-    const mdfe = await saveMDFe({ ...formData });
+    const user = getCurrentUser();
+    const mdfe = await saveMDFe({ ...formData, emitidoPor: user ? user.nome : 'Sistema' });
 
     if (!focus.isConfigured()) {
       showToast(`MDF-e nº ${String(mdfe.numero).padStart(6, '0')} salvo no banco. Configure a API para emitir na SEFAZ.`, 'warning');
