@@ -95,3 +95,4 @@ app.listen(PORT, () => {
     console.log(`\n  🚀 Proxy Focus NFe rodando em http://localhost:${PORT}`);
     console.log(`  📡 Pronto para comunicar com a SEFAZ\n`);
 });
+

@@ -71,3 +71,4 @@ window.handleLogout = () => {
 
 // Start app
 initApp();
+

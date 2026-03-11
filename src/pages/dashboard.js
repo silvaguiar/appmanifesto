@@ -154,3 +154,4 @@ function getStatusBadge(status) {
   };
   return badges[status] || '<span class="badge badge-info">-</span>';
 }
+

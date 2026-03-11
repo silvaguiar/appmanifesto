@@ -246,3 +246,4 @@ export async function renderEmpresa() {
     await renderEmpresa(); // re-render to show saved status banner
   });
 }
+

@@ -267,3 +267,4 @@ async function emitMDFe() {
     btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Emitir MDF-e';
   }
 }
+

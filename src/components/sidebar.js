@@ -74,3 +74,4 @@ export function renderSidebar() {
 window.navigateTo = function (route) {
   navigate(route);
 };
+

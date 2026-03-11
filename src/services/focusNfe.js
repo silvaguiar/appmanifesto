@@ -237,3 +237,4 @@ export function montarPayloadMDFe(formData, motorista, veiculo, empresa) {
 
     return payload;
 }
+

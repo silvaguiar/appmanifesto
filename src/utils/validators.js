@@ -113,3 +113,4 @@ export const TIPOS_RODADO = [
 
 // Categorias CNH
 export const CATEGORIAS_CNH = ['A', 'B', 'C', 'D', 'E', 'AB', 'AC', 'AD', 'AE'];
+

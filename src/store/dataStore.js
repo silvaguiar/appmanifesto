@@ -311,3 +311,4 @@ function mapUser(row) {
     if (!row) return null;
     return { id: row.id, login: row.login, senha: row.senha, nome: row.nome, role: row.role, ativo: row.ativo };
 }
+

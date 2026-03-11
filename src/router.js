@@ -64,3 +64,4 @@ window.addEventListener('hashchange', () => {
     currentRoute = window.location.hash.slice(1);
     renderRoute();
 });
+

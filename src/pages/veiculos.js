@@ -287,3 +287,4 @@ async function confirmDeleteVeiculo(id) {
     renderVeiculos();
   });
 }
+
