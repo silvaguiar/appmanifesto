@@ -53,8 +53,9 @@ function initApp() {
 }
 
 // Global Handlers
-window.handleLogin = (username, password) => {
-  if (authLogin(username, password)) {
+window.handleLogin = async (username, password) => {
+  const success = await authLogin(username, password);
+  if (success) {
     initApp();
     navigate('/dashboard');
     return true;

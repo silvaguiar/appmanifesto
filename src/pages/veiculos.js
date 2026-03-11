@@ -8,16 +8,18 @@ import { showToast } from '../components/toast.js';
 
 let searchTerm = '';
 
-export function renderVeiculos() {
-    const content = document.getElementById('page-content');
-    const veiculos = getVeiculos().filter(v => {
-        if (!searchTerm) return true;
-        const term = searchTerm.toLowerCase();
-        return v.placa.toLowerCase().includes(term) ||
-            (v.proprietarioNome || '').toLowerCase().includes(term);
-    });
+export async function renderVeiculos() {
+  const content = document.getElementById('page-content');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const allVeiculos = await getVeiculos();
+  const veiculos = allVeiculos.filter(v => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return v.placa.toLowerCase().includes(term) ||
+      (v.proprietarioNome || '').toLowerCase().includes(term);
+  });
 
-    content.innerHTML = `
+  content.innerHTML = `
     <div class="fade-in">
       <div class="page-header page-header-actions">
         <div>
@@ -66,9 +68,9 @@ export function renderVeiculos() {
             </thead>
             <tbody>
               ${veiculos.map(v => {
-        const tipoRodado = TIPOS_RODADO.find(t => t.value === v.tipoRodado);
-        const tipoCarroceria = TIPOS_CARROCERIA.find(t => t.value === v.tipoCarroceria);
-        return `
+    const tipoRodado = TIPOS_RODADO.find(t => t.value === v.tipoRodado);
+    const tipoCarroceria = TIPOS_CARROCERIA.find(t => t.value === v.tipoCarroceria);
+    return `
                   <tr>
                     <td style="color:var(--text-primary); font-weight:600; font-family:monospace; font-size:0.95rem">${v.placa}</td>
                     <td>${tipoRodado ? tipoRodado.label : v.tipoRodado || '-'}</td>
@@ -89,7 +91,7 @@ export function renderVeiculos() {
                     </td>
                   </tr>
                 `;
-    }).join('')}
+  }).join('')}
             </tbody>
           </table>
         </div>
@@ -97,28 +99,28 @@ export function renderVeiculos() {
     </div>
   `;
 
-    // Events
-    document.getElementById('btn-novo-veiculo')?.addEventListener('click', () => openVeiculoModal());
-    document.getElementById('btn-empty-novo-veiculo')?.addEventListener('click', () => openVeiculoModal());
-    document.getElementById('search-veiculo')?.addEventListener('input', (e) => {
-        searchTerm = e.target.value;
-        renderVeiculos();
-    });
-    document.querySelectorAll('.btn-edit-veiculo').forEach(btn => {
-        btn.addEventListener('click', () => openVeiculoModal(btn.dataset.id));
-    });
-    document.querySelectorAll('.btn-delete-veiculo').forEach(btn => {
-        btn.addEventListener('click', () => confirmDeleteVeiculo(btn.dataset.id));
-    });
+  // Events
+  document.getElementById('btn-novo-veiculo')?.addEventListener('click', () => openVeiculoModal());
+  document.getElementById('btn-empty-novo-veiculo')?.addEventListener('click', () => openVeiculoModal());
+  document.getElementById('search-veiculo')?.addEventListener('input', (e) => {
+    searchTerm = e.target.value;
+    renderVeiculos();
+  });
+  document.querySelectorAll('.btn-edit-veiculo').forEach(btn => {
+    btn.addEventListener('click', () => openVeiculoModal(btn.dataset.id));
+  });
+  document.querySelectorAll('.btn-delete-veiculo').forEach(btn => {
+    btn.addEventListener('click', () => confirmDeleteVeiculo(btn.dataset.id));
+  });
 }
 
-function openVeiculoModal(editId = null) {
-    const veiculo = editId ? getVeiculoById(editId) : {};
-    const isEdit = !!editId;
+async function openVeiculoModal(editId = null) {
+  const veiculo = editId ? await getVeiculoById(editId) : {};
+  const isEdit = !!editId;
 
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
     <div class="modal modal-lg">
       <div class="modal-header">
         <h3>${isEdit ? 'Editar Veículo' : 'Novo Veículo'}</h3>
@@ -195,67 +197,67 @@ function openVeiculoModal(editId = null) {
     </div>
   `;
 
-    document.body.appendChild(overlay);
+  document.body.appendChild(overlay);
 
-    // Placa formatting
-    const placaInput = document.getElementById('veic-placa');
-    placaInput.addEventListener('input', () => {
-        placaInput.value = formatarPlaca(placaInput.value);
-        document.getElementById('placa-error').style.display = 'none';
-        placaInput.classList.remove('error');
-    });
+  // Placa formatting
+  const placaInput = document.getElementById('veic-placa');
+  placaInput.addEventListener('input', () => {
+    placaInput.value = formatarPlaca(placaInput.value);
+    document.getElementById('placa-error').style.display = 'none';
+    placaInput.classList.remove('error');
+  });
 
-    // Close
-    const closeModal = () => overlay.remove();
-    document.getElementById('close-veiculo-modal').addEventListener('click', closeModal);
-    document.getElementById('cancel-veiculo-modal').addEventListener('click', closeModal);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+  // Close
+  const closeModal = () => overlay.remove();
+  document.getElementById('close-veiculo-modal').addEventListener('click', closeModal);
+  document.getElementById('cancel-veiculo-modal').addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
 
-    // Save
-    document.getElementById('save-veiculo').addEventListener('click', () => {
-        const placa = document.getElementById('veic-placa').value.trim().toUpperCase();
-        const renavam = document.getElementById('veic-renavam').value.trim();
-        const uf = document.getElementById('veic-uf').value;
-        const tipoRodado = document.getElementById('veic-tipo-rodado').value;
-        const tipoCarroceria = document.getElementById('veic-tipo-carroceria').value;
-        const tara = document.getElementById('veic-tara').value;
-        const capKg = document.getElementById('veic-cap-kg').value;
-        const capM3 = document.getElementById('veic-cap-m3').value;
-        const proprietarioDoc = document.getElementById('veic-prop-doc').value.trim();
-        const proprietarioNome = document.getElementById('veic-prop-nome').value.trim();
+  // Save
+  document.getElementById('save-veiculo').addEventListener('click', async () => {
+    const placa = document.getElementById('veic-placa').value.trim().toUpperCase();
+    const renavam = document.getElementById('veic-renavam').value.trim();
+    const uf = document.getElementById('veic-uf').value;
+    const tipoRodado = document.getElementById('veic-tipo-rodado').value;
+    const tipoCarroceria = document.getElementById('veic-tipo-carroceria').value;
+    const tara = document.getElementById('veic-tara').value;
+    const capKg = document.getElementById('veic-cap-kg').value;
+    const capM3 = document.getElementById('veic-cap-m3').value;
+    const proprietarioDoc = document.getElementById('veic-prop-doc').value.trim();
+    const proprietarioNome = document.getElementById('veic-prop-nome').value.trim();
 
-        if (!placa || !uf || !tipoRodado || !tipoCarroceria || !tara || !capKg) {
-            showToast('Preencha todos os campos obrigatórios', 'error');
-            return;
-        }
+    if (!placa || !uf || !tipoRodado || !tipoCarroceria || !tara || !capKg) {
+      showToast('Preencha todos os campos obrigatórios', 'error');
+      return;
+    }
 
-        if (!validarPlaca(placa)) {
-            document.getElementById('placa-error').style.display = 'block';
-            placaInput.classList.add('error');
-            showToast('Placa inválida (Use formato ABC1D23 ou ABC1234)', 'error');
-            return;
-        }
+    if (!validarPlaca(placa)) {
+      document.getElementById('placa-error').style.display = 'block';
+      placaInput.classList.add('error');
+      showToast('Placa inválida (Use formato ABC1D23 ou ABC1234)', 'error');
+      return;
+    }
 
-        const data = {
-            placa, renavam, uf, tipoRodado, tipoCarroceria, tara, capKg, capM3,
-            proprietarioDoc, proprietarioNome,
-            ...(isEdit ? { id: editId } : {})
-        };
+    const data = {
+      placa, renavam, uf, tipoRodado, tipoCarroceria, tara, capKg, capM3,
+      proprietarioDoc, proprietarioNome,
+      ...(isEdit ? { id: editId } : {})
+    };
 
-        saveVeiculo(data);
-        showToast(isEdit ? 'Veículo atualizado!' : 'Veículo cadastrado!', 'success');
-        closeModal();
-        renderVeiculos();
-    });
+    await saveVeiculo(data);
+    showToast(isEdit ? 'Veículo atualizado!' : 'Veículo cadastrado!', 'success');
+    closeModal();
+    renderVeiculos();
+  });
 }
 
-function confirmDeleteVeiculo(id) {
-    const veiculo = getVeiculoById(id);
-    if (!veiculo) return;
+async function confirmDeleteVeiculo(id) {
+  const veiculo = await getVeiculoById(id);
+  if (!veiculo) return;
 
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
     <div class="modal" style="max-width:420px">
       <div class="modal-body text-center" style="padding:32px">
         <div class="confirm-icon text-danger">
@@ -275,13 +277,13 @@ function confirmDeleteVeiculo(id) {
     </div>
   `;
 
-    document.body.appendChild(overlay);
-    document.getElementById('cancel-delete').addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-    document.getElementById('confirm-delete').addEventListener('click', () => {
-        deleteVeiculo(id);
-        showToast('Veículo excluído', 'success');
-        overlay.remove();
-        renderVeiculos();
-    });
+  document.body.appendChild(overlay);
+  document.getElementById('cancel-delete').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  document.getElementById('confirm-delete').addEventListener('click', async () => {
+    await deleteVeiculo(id);
+    showToast('Veículo excluído', 'success');
+    overlay.remove();
+    renderVeiculos();
+  });
 }

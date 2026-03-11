@@ -20,7 +20,7 @@ export function getCurrentRoute() {
     return currentRoute || window.location.hash.slice(1) || '/dashboard';
 }
 
-export function renderRoute() {
+export async function renderRoute() {
     const path = getCurrentRoute();
     const user = getCurrentUser();
 
@@ -45,11 +45,11 @@ export function renderRoute() {
 
     const handler = routes[path];
     if (handler) {
-        handler();
+        await handler();
     } else {
         // Default: dashboard or login
         const defaultPath = user ? '/dashboard' : '/login';
-        if (routes[defaultPath]) routes[defaultPath]();
+        if (routes[defaultPath]) await routes[defaultPath]();
     }
 
     // Update active nav

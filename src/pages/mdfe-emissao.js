@@ -1,4 +1,4 @@
-import { getMotoristas, getVeiculos, getMotoristaById, getVeiculoById, saveMDFe, getEmpresa } from '../store/dataStore.js';
+import { getMotoristas, getVeiculos, getMotoristaById, getVeiculoById, saveMDFe, getEmpresa, updateMDFeStatus } from '../store/dataStore.js';
 import { UFS, formatarCPF, formatarChaveAcesso, validarChaveAcesso, TIPOS_RODADO, TIPOS_CARROCERIA } from '../utils/validators.js';
 import { showToast } from '../components/toast.js';
 import { navigate } from '../router.js';
@@ -11,10 +11,12 @@ const STEPS = [
 
 let currentStep = 0;
 let formData = {};
+let motoristasLivre = [];
+let veiculosLivre = [];
 
-function resetForm() {
+async function resetForm() {
   currentStep = 0;
-  
+
   if (window.mdfeDraftData) {
     formData = window.mdfeDraftData;
     window.mdfeDraftData = null; // consume
@@ -25,17 +27,26 @@ function resetForm() {
       motoristaId: '', veiculoId: '', documentos: [], pesoBruto: '', valorCarga: '', infoComplementar: '', percurso: []
     };
   }
+
+  // Pre-fetch data for the wizard
+  motoristasLivre = await getMotoristas();
+  veiculosLivre = await getVeiculos();
 }
 
-export function renderMDFeEmissao() { resetForm(); renderWizard(); }
+export async function renderMDFeEmissao() {
+  const content = document.getElementById('page-content');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  await resetForm();
+  await renderWizard();
+}
 
-function renderWizard() {
+async function renderWizard() {
   const content = document.getElementById('page-content');
   content.innerHTML = `<div class="fade-in">
     <div class="page-header"><h2><i class="fa-solid fa-file-circle-plus" style="color:var(--primary-400);margin-right:10px"></i>Emitir MDF-e</h2><p>Preencha os dados para gerar o Manifesto Eletrônico</p></div>
     <div class="card"><div class="card-body">
       <div class="wizard-steps">${STEPS.map((s, i) => `<div class="wizard-step ${i < currentStep ? 'completed' : i === currentStep ? 'active' : ''}"><div class="wizard-step-number">${i < currentStep ? '<i class="fa-solid fa-check" style="font-size:0.75rem"></i>' : i + 1}</div><span class="wizard-step-label">${s.label}</span></div>`).join('')}</div>
-      <div class="wizard-content" id="wizard-content">${renderStepContent(currentStep)}</div>
+      <div class="wizard-content" id="wizard-content">${await renderStepContent(currentStep)}</div>
       <div class="wizard-actions">
         <button class="btn btn-secondary" id="btn-prev" ${currentStep === 0 ? 'disabled style="opacity:0.5"' : ''}><i class="fa-solid fa-arrow-left"></i> Anterior</button>
         <div>${currentStep === 6 ? '<button class="btn btn-success btn-lg" id="btn-emit"><i class="fa-solid fa-paper-plane"></i> Emitir MDF-e</button>' : '<button class="btn btn-primary" id="btn-next">Próximo <i class="fa-solid fa-arrow-right"></i></button>'}</div>
@@ -47,7 +58,7 @@ function renderWizard() {
   setupEvents();
 }
 
-function renderStepContent(step) {
+async function renderStepContent(step) {
   if (step === 0) return `<div><h3 style="font-size:1.1rem;margin-bottom:20px"><i class="fa-solid fa-map-location-dot" style="color:var(--primary-300);margin-right:8px"></i>Dados Gerais</h3>
     <div class="form-row"><div class="form-group"><label class="form-label">UF Início *</label><select class="form-control form-select" id="wiz-uf-inicio"><option value="">Selecione a UF origem</option>${UFS.map(u => `<option value="${u}" ${formData.ufInicio === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div>
     <div class="form-group"><label class="form-label">UF Fim *</label><select class="form-control form-select" id="wiz-uf-fim"><option value="">Selecione a UF destino</option>${UFS.map(u => `<option value="${u}" ${formData.ufFim === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div></div>
@@ -69,16 +80,16 @@ function renderStepContent(step) {
     </div></div></div>`;
 
   if (step === 1) {
-    const mots = getMotoristas().filter(m => m.ativo !== false);
+    const mots = motoristasLivre.filter(m => m.ativo !== false);
     return `<div><h3 style="font-size:1.1rem;margin-bottom:20px"><i class="fa-solid fa-id-card" style="color:var(--primary-300);margin-right:8px"></i>Selecione o Motorista</h3>
-    ${mots.length === 0 ? '<div class="empty-state"><i class="fa-solid fa-user-slash"></i><h4>Nenhum motorista</h4><p>Cadastre motoristas primeiro</p><button class="btn btn-primary" onclick="navigateTo(\'/motoristas\')"><i class="fa-solid fa-plus"></i> Cadastrar</button></div>'
+    ${mots.length === 0 ? '<div class="empty-state"><i class="fa-solid fa-user-slash"></i><h4>Nenhum motorista</h4><p>Cadastre motoristas primeiro</p><button class="btn btn-primary" onclick="window.navigateTo(\'/motoristas\')"><i class="fa-solid fa-plus"></i> Cadastrar</button></div>'
         : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">${mots.map(m => `<div class="card motorista-card" data-id="${m.id}" style="cursor:pointer;${formData.motoristaId === m.id ? 'border-color:var(--primary-400);background:rgba(99,102,241,0.08)' : ''}"><div class="card-body" style="padding:16px;display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--primary-500),#8b5cf6);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:1rem">${m.nome.charAt(0)}</div><div style="flex:1"><div style="font-weight:600;color:var(--text-primary)">${m.nome}</div><div style="font-size:0.78rem;color:var(--text-muted)">CPF: ${formatarCPF(m.cpf)}</div><div style="font-size:0.75rem;color:var(--text-muted)">CNH: ${m.cnh} | ${m.categoriaCnh}</div></div>${formData.motoristaId === m.id ? '<i class="fa-solid fa-circle-check" style="color:var(--primary-400);font-size:1.2rem"></i>' : ''}</div></div>`).join('')}</div>`}</div>`;
   }
 
   if (step === 2) {
-    const veics = getVeiculos().filter(v => v.ativo !== false);
+    const veics = veiculosLivre.filter(v => v.ativo !== false);
     return `<div><h3 style="font-size:1.1rem;margin-bottom:20px"><i class="fa-solid fa-truck" style="color:var(--primary-300);margin-right:8px"></i>Selecione o Veículo</h3>
-    ${veics.length === 0 ? '<div class="empty-state"><i class="fa-solid fa-truck-ramp-box"></i><h4>Nenhum veículo</h4><button class="btn btn-primary" onclick="navigateTo(\'/veiculos\')"><i class="fa-solid fa-plus"></i> Cadastrar</button></div>'
+    ${veics.length === 0 ? '<div class="empty-state"><i class="fa-solid fa-truck-ramp-box"></i><h4>Nenhum veículo</h4><button class="btn btn-primary" onclick="window.navigateTo(\'/veiculos\')"><i class="fa-solid fa-plus"></i> Cadastrar</button></div>'
         : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">${veics.map(v => { const tr = TIPOS_RODADO.find(t => t.value === v.tipoRodado); return `<div class="card veiculo-card" data-id="${v.id}" style="cursor:pointer;${formData.veiculoId === v.id ? 'border-color:var(--primary-400);background:rgba(99,102,241,0.08)' : ''}"><div class="card-body" style="padding:16px;display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:var(--radius-sm);background:rgba(96,165,250,0.12);display:flex;align-items:center;justify-content:center;color:var(--info);font-size:1.1rem"><i class="fa-solid fa-truck"></i></div><div style="flex:1"><div style="font-weight:700;font-family:monospace;font-size:1.05rem;color:var(--text-primary)">${v.placa}</div><div style="font-size:0.78rem;color:var(--text-muted)">${tr ? tr.label : '-'} | ${v.uf}</div><div style="font-size:0.75rem;color:var(--text-muted)">Cap: ${Number(v.capKg).toLocaleString('pt-BR')} kg</div></div>${formData.veiculoId === v.id ? '<i class="fa-solid fa-circle-check" style="color:var(--primary-400);font-size:1.2rem"></i>' : ''}</div></div>` }).join('')}</div>`}</div>`;
   }
 
@@ -107,7 +118,8 @@ function renderStepContent(step) {
     ${formData.percurso.length > 0 ? `<div style="margin-top:20px;padding:14px;background:rgba(99,102,241,0.06);border-radius:var(--radius-md);border:1px solid rgba(99,102,241,0.12)"><div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:4px">Rota:</div><div style="font-size:0.95rem;font-weight:600;color:var(--primary-300)">${formData.ufInicio} → ${formData.percurso.join(' → ')} → ${formData.ufFim}</div></div>` : ''}</div>`;
 
   if (step === 6) {
-    const mot = getMotoristas().find(m => m.id === formData.motoristaId); const veic = getVeiculos().find(v => v.id === formData.veiculoId);
+    const mot = motoristasLivre.find(m => m.id === formData.motoristaId);
+    const veic = veiculosLivre.find(v => v.id === formData.veiculoId);
     return `<div><h3 style="font-size:1.1rem;margin-bottom:20px"><i class="fa-solid fa-check-double" style="color:var(--success);margin-right:8px"></i>Revisão Final</h3>
     <div class="review-section"><h4><i class="fa-solid fa-map-location-dot"></i> Dados Gerais</h4>
       <div class="review-row"><span class="label">UF Início / Fim</span><span class="value">${formData.ufInicio} → ${formData.ufFim}</span></div>
@@ -145,13 +157,13 @@ function setupEvents() {
 
     const ufIni = document.getElementById('wiz-uf-inicio');
     const ufFim = document.getElementById('wiz-uf-fim');
-    if (ufIni) ufIni.addEventListener('change', () => fetchCidades(ufIni.value, 'dl-mun-c', 'munListC', {mun: 'wiz-mun-c', cod: 'wiz-cod-c'}));
-    if (ufFim) ufFim.addEventListener('change', () => fetchCidades(ufFim.value, 'dl-mun-d', 'munListD', {mun: 'wiz-mun-d', cod: 'wiz-cod-d'}));
+    if (ufIni) ufIni.addEventListener('change', () => fetchCidades(ufIni.value, 'dl-mun-c', 'munListC', { mun: 'wiz-mun-c', cod: 'wiz-cod-c' }));
+    if (ufFim) ufFim.addEventListener('change', () => fetchCidades(ufFim.value, 'dl-mun-d', 'munListD', { mun: 'wiz-mun-d', cod: 'wiz-cod-d' }));
 
     // Initial load for draft edits
     if (formData.ufInicio && !window.munListC) fetchCidades(formData.ufInicio, 'dl-mun-c', 'munListC', null);
     else if (formData.ufInicio && window.munListC) { const dl = document.getElementById('dl-mun-c'); if (dl) dl.innerHTML = window.munListC.map(c => `<option value="${c.nome}"></option>`).join(''); }
-    
+
     if (formData.ufFim && !window.munListD) fetchCidades(formData.ufFim, 'dl-mun-d', 'munListD', null);
     else if (formData.ufFim && window.munListD) { const dl = document.getElementById('dl-mun-d'); if (dl) dl.innerHTML = window.munListD.map(c => `<option value="${c.nome}"></option>`).join(''); }
 
@@ -208,37 +220,38 @@ async function emitMDFe() {
   btn.disabled = true;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Emitindo...';
 
-  // Save locally first
-  const mdfe = saveMDFe({ ...formData });
-
-  if (!focus.isConfigured()) {
-    showToast(`MDF-e nº ${String(mdfe.numero).padStart(6, '0')} salvo localmente. Configure a API para emitir na SEFAZ.`, 'warning');
-    setTimeout(() => navigate('/mdfe-lista'), 800);
-    return;
-  }
-
+  // Save in Supabase first
   try {
-    const empresa = getEmpresa();
-    const motorista = getMotoristaById(formData.motoristaId);
-    const veiculo = getVeiculoById(formData.veiculoId);
+    const mdfe = await saveMDFe({ ...formData });
+
+    if (!focus.isConfigured()) {
+      showToast(`MDF-e nº ${String(mdfe.numero).padStart(6, '0')} salvo no banco. Configure a API para emitir na SEFAZ.`, 'warning');
+      setTimeout(() => navigate('/mdfe-lista'), 800);
+      return;
+    }
+
+    const empresa = await getEmpresa();
+    const motorista = await getMotoristaById(formData.motoristaId);
+    const veiculo = await getVeiculoById(formData.veiculoId);
     const payload = focus.montarPayloadMDFe(formData, motorista, veiculo, empresa);
 
     const ref = mdfe.id;
     const result = await focus.emitirMDFe(ref, payload);
 
-    // Update local record with SEFAZ response
-    const mdfes = JSON.parse(localStorage.getItem('mdfe_mdfes') || '[]');
-    const idx = mdfes.findIndex(m => m.id === mdfe.id);
-    if (idx !== -1) {
-      mdfes[idx].focusRef = ref;
-      mdfes[idx].status = result.status || 'processando_autorizacao';
-      mdfes[idx].statusSefaz = result.status_sefaz;
-      mdfes[idx].mensagemSefaz = result.mensagem_sefaz;
-      if (result.chave_mdfe) mdfes[idx].chaveMdfe = result.chave_mdfe;
-      if (result.numero) mdfes[idx].numeroSefaz = result.numero;
-      if (result.caminho_damdfe) mdfes[idx].caminhoDAMDFE = result.caminho_damdfe;
-      localStorage.setItem('mdfe_mdfes', JSON.stringify(mdfes));
-    }
+    // Update Supabase record with SEFAZ response
+    const updates = {
+      focusRef: ref,
+      status: result.status || 'processando_autorizacao',
+      statusSefaz: result.status_sefaz,
+      mensagemSefaz: result.mensagem_sefaz,
+      chaveMdfe: result.chave_mdfe,
+      numeroSefaz: result.numero,
+      serieSefaz: result.serie,
+      caminhoDAMDFE: result.caminho_damdfe,
+      caminhoXml: result.caminho_xml
+    };
+
+    await updateMDFeStatus(mdfe.id, updates);
 
     if (result.status === 'erro_autorizacao') {
       showToast(`Rejeição SEFAZ: ${result.mensagem_sefaz}`, 'error');
@@ -249,7 +262,7 @@ async function emitMDFe() {
     }
     setTimeout(() => navigate('/mdfe-lista'), 1200);
   } catch (err) {
-    showToast(`Erro ao enviar para SEFAZ: ${err.message}`, 'error');
+    showToast(`Erro ao emitir: ${err.message}`, 'error');
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Emitir MDF-e';
   }

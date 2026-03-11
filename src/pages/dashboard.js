@@ -2,7 +2,7 @@
 // Dashboard Page
 // ============================================
 
-import { getEstatisticas, getMDFes, getMotoristaById, getVeiculoById } from '../store/dataStore.js';
+import { getEstatisticas, getMDFes, getMotoristaById } from '../store/dataStore.js';
 import { navigate } from '../router.js';
 
 function goToLista(filter) {
@@ -10,12 +10,24 @@ function goToLista(filter) {
   navigate('/mdfe-lista');
 }
 
-export function renderDashboard() {
-    const stats = getEstatisticas();
-    const mdfes = getMDFes().sort((a, b) => new Date(b.criadoEm) - new Date(a.criadoEm)).slice(0, 8);
+export async function renderDashboard() {
+  const content = document.getElementById('page-content');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
-    const content = document.getElementById('page-content');
-    content.innerHTML = `
+  const stats = await getEstatisticas();
+  const allMdfes = await getMDFes();
+  const mdfes = allMdfes.slice(0, 8);
+
+  // Pre-fetch motorista names for recent MDFes
+  const motoristaNames = {};
+  for (const mdfe of mdfes) {
+    if (mdfe.motoristaId && !motoristaNames[mdfe.motoristaId]) {
+      const mot = await getMotoristaById(mdfe.motoristaId);
+      motoristaNames[mdfe.motoristaId] = mot ? mot.nome : '-';
+    }
+  }
+
+  content.innerHTML = `
     <div class="fade-in">
       <div class="page-header">
         <h2>Dashboard</h2>
@@ -112,18 +124,14 @@ export function renderDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  ${mdfes.map(mdfe => {
-        const motorista = getMotoristaById(mdfe.motoristaId);
-        const statusBadge = getStatusBadge(mdfe.status);
-        return `
+                  ${mdfes.map(mdfe => `
                       <tr>
                         <td style="font-weight:600; color:var(--text-primary)">${String(mdfe.numero).padStart(6, '0')}</td>
-                        <td>${motorista ? motorista.nome : '-'}</td>
+                        <td>${motoristaNames[mdfe.motoristaId] || '-'}</td>
                         <td>${mdfe.ufInicio || '-'} → ${mdfe.ufFim || '-'}</td>
-                        <td>${statusBadge}</td>
+                        <td>${getStatusBadge(mdfe.status)}</td>
                       </tr>
-                    `;
-    }).join('')}
+                    `).join('')}
                 </tbody>
               </table>
             `}
@@ -133,15 +141,16 @@ export function renderDashboard() {
     </div>
   `;
 
-  // Expose globally for onclick handlers inside template strings
   window.goToLista = goToLista;
 }
 
 function getStatusBadge(status) {
-    const badges = {
-        autorizado: '<span class="badge badge-success"><i class="fa-solid fa-circle" style="font-size:6px"></i> Autorizado</span>',
-        encerrado: '<span class="badge badge-warning"><i class="fa-solid fa-circle" style="font-size:6px"></i> Encerrado</span>',
-        cancelado: '<span class="badge badge-danger"><i class="fa-solid fa-circle" style="font-size:6px"></i> Cancelado</span>',
-    };
-    return badges[status] || '<span class="badge badge-info">-</span>';
+  const badges = {
+    autorizado: '<span class="badge badge-success"><i class="fa-solid fa-circle" style="font-size:6px"></i> Autorizado</span>',
+    encerrado: '<span class="badge badge-warning"><i class="fa-solid fa-circle" style="font-size:6px"></i> Encerrado</span>',
+    cancelado: '<span class="badge badge-danger"><i class="fa-solid fa-circle" style="font-size:6px"></i> Cancelado</span>',
+    processando_autorizacao: '<span class="badge badge-info"><i class="fa-solid fa-spinner fa-spin" style="font-size:6px"></i> Processando</span>',
+    erro_autorizacao: '<span class="badge badge-danger"><i class="fa-solid fa-triangle-exclamation" style="font-size:8px"></i> Rejeitado</span>',
+  };
+  return badges[status] || '<span class="badge badge-info">-</span>';
 }

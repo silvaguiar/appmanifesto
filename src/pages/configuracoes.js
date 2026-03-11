@@ -2,10 +2,17 @@ import { getConfigData, saveConfig, isConfigured } from '../services/focusNfe.js
 import { showToast } from '../components/toast.js';
 import { getUsers, saveUser, deleteUser } from '../store/dataStore.js';
 
-export function renderConfiguracoes() {
-    const cfg = getConfigData();
-    const content = document.getElementById('page-content');
-    content.innerHTML = `<div class="fade-in">
+export async function renderConfiguracoes() {
+  const cfg = getConfigData();
+  const content = document.getElementById('page-content');
+
+  // Show loading state
+  content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  // Fetch users first
+  const users = await getUsers();
+
+  content.innerHTML = `<div class="fade-in">
     <div class="page-header"><h2><i class="fa-solid fa-gear" style="color:var(--primary-400);margin-right:10px"></i>Configurações</h2><p>Configure a integração com a API Focus NFe para comunicação com a SEFAZ</p></div>
     
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
@@ -68,22 +75,22 @@ export function renderConfiguracoes() {
               <tr>
                 <th>Nome</th>
                 <th>Login</th>
-                <th>Senha</th>
                 <th>Cargo</th>
-                <th>Ações</th>
+                <th style="width:100px">Ações</th>
               </tr>
             </thead>
             <tbody id="users-table-body">
-              ${getUsers().map(user => `
+              ${users.map(user => `
                 <tr>
                   <td>${user.nome}</td>
                   <td>${user.login}</td>
-                  <td>${user.senha}</td>
                   <td><span class="badge ${user.role === 'admin' ? 'badge-primary' : 'badge-info'}">${user.role === 'admin' ? 'Admin' : 'Padrão'}</span></td>
                   <td>
-                    ${user.login !== 'TI' ? `
-                      <button class="btn btn-sm btn-danger delete-user" data-id="${user.id}"><i class="fa-solid fa-trash"></i></button>
-                    ` : '<span style="font-size:0.7rem;color:var(--text-muted)">Protegido</span>'}
+                    <div class="actions">
+                      ${user.login !== 'TI' ? `
+                        <button class="btn btn-sm btn-danger delete-user" data-id="${user.id}" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                      ` : '<span style="font-size:0.7rem;color:var(--text-muted)">Protegido</span>'}
+                    </div>
                   </td>
                 </tr>
               `).join('')}
@@ -106,7 +113,7 @@ export function renderConfiguracoes() {
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Senha</label>
-              <input type="text" class="form-control" id="new-user-senha" placeholder="Senha de acesso">
+              <input type="password" class="form-control" id="new-user-senha" placeholder="Senha de acesso">
             </div>
             <div class="form-group">
               <label class="form-label">Cargo</label>
@@ -130,7 +137,7 @@ export function renderConfiguracoes() {
           <div class="form-group" style="margin-bottom:0">
             <label class="form-label">Usuário</label>
             <select class="form-control form-select" id="pwd-user-select">
-              ${getUsers().map(u => `<option value="${u.id}">${u.nome} (${u.login})</option>`).join('')}
+              ${users.map(u => `<option value="${u.id}">${u.nome} (${u.login})</option>`).join('')}
             </select>
           </div>
           <div class="form-group" style="margin-bottom:0">
@@ -149,70 +156,77 @@ export function renderConfiguracoes() {
     </div>
   </div>`;
 
-    document.getElementById('save-config').addEventListener('click', () => {
-        const token = document.getElementById('cfg-token').value.trim();
-        const ambiente = document.getElementById('cfg-ambiente').value;
-        if (!token) { showToast('Informe o token da API', 'error'); return; }
-        saveConfig({ token, ambiente });
-        showToast('Configurações salvas!', 'success');
+  document.getElementById('save-config').addEventListener('click', () => {
+    const token = document.getElementById('cfg-token').value.trim();
+    const ambiente = document.getElementById('cfg-ambiente').value;
+    if (!token) { showToast('Informe o token da API', 'error'); return; }
+    saveConfig({ token, ambiente });
+    showToast('Configurações salvas!', 'success');
+    renderConfiguracoes();
+  });
+
+  document.getElementById('test-config').addEventListener('click', async () => {
+    const token = document.getElementById('cfg-token').value.trim();
+    if (!token) { showToast('Informe o token primeiro', 'error'); return; }
+    try {
+      const resp = await fetch('http://localhost:3456/api/health');
+      if (resp.ok) {
+        showToast('Proxy conectado! Servidor rodando.', 'success');
+      } else {
+        showToast('Servidor proxy não respondeu corretamente', 'error');
+      }
+    } catch {
+      showToast('Servidor proxy não encontrado. Execute: node server.js', 'error');
+    }
+  });
+
+  // User management handlers
+  document.getElementById('add-user').addEventListener('click', async () => {
+    const nome = document.getElementById('new-user-nome').value.trim();
+    const login = document.getElementById('new-user-login').value.trim();
+    const senha = document.getElementById('new-user-senha').value.trim();
+    const role = document.getElementById('new-user-role').value;
+
+    if (!nome || !login || !senha) {
+      showToast('Preencha todos os campos do novo usuário', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('add-user');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Criando...';
+
+    await saveUser({ nome, login, senha, role });
+    showToast('Usuário criado com sucesso!', 'success');
+    renderConfiguracoes();
+  });
+
+  document.querySelectorAll('.delete-user').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      if (confirm('Tem certeza que deseja excluir este usuário?')) {
+        await deleteUser(id);
+        showToast('Usuário removido', 'success');
         renderConfiguracoes();
+      }
     });
+  });
 
-    document.getElementById('test-config').addEventListener('click', async () => {
-        const token = document.getElementById('cfg-token').value.trim();
-        if (!token) { showToast('Informe o token primeiro', 'error'); return; }
-        try {
-            const resp = await fetch('http://localhost:3456/api/health');
-            if (resp.ok) {
-                showToast('Proxy conectado! Servidor rodando.', 'success');
-            } else {
-                showToast('Servidor proxy não respondeu corretamente', 'error');
-            }
-        } catch {
-            showToast('Servidor proxy não encontrado. Execute: node server.js', 'error');
-        }
-    });
+  document.getElementById('save-password').addEventListener('click', async () => {
+    const id = document.getElementById('pwd-user-select').value;
+    const nova = document.getElementById('pwd-new').value.trim();
+    const conf = document.getElementById('pwd-confirm').value.trim();
 
-    // User management handlers
-    document.getElementById('add-user').addEventListener('click', () => {
-        const nome = document.getElementById('new-user-nome').value.trim();
-        const login = document.getElementById('new-user-login').value.trim();
-        const senha = document.getElementById('new-user-senha').value.trim();
-        const role = document.getElementById('new-user-role').value;
+    if (!nova) { showToast('Informe a nova senha', 'error'); return; }
+    if (nova !== conf) { showToast('As senhas não coincidem', 'error'); return; }
+    if (nova.length < 4) { showToast('A senha deve ter no mínimo 4 caracteres', 'error'); return; }
 
-        if (!nome || !login || !senha) {
-            showToast('Preencha todos os campos do novo usuário', 'error');
-            return;
-        }
+    const btn = document.getElementById('save-password');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Alterando...';
 
-        saveUser({ nome, login, senha, role });
-        showToast('Usuário criado com sucesso!', 'success');
-        renderConfiguracoes();
-    });
-
-    document.querySelectorAll('.delete-user').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const id = btn.getAttribute('data-id');
-            if (confirm('Tem certeza que deseja excluir este usuário?')) {
-                deleteUser(id);
-                showToast('Usuário removido', 'success');
-                renderConfiguracoes();
-            }
-        });
-    });
-
-    document.getElementById('save-password').addEventListener('click', () => {
-        const id = document.getElementById('pwd-user-select').value;
-        const nova = document.getElementById('pwd-new').value.trim();
-        const conf = document.getElementById('pwd-confirm').value.trim();
-
-        if (!nova || !conf) { showToast('Preencha os dois campos de senha', 'error'); return; }
-        if (nova !== conf) { showToast('As senhas não coincidem', 'error'); return; }
-        if (nova.length < 4) { showToast('A senha deve ter no mínimo 4 caracteres', 'error'); return; }
-
-        saveUser({ id, senha: nova });
-        showToast('Senha alterada com sucesso!', 'success');
-        document.getElementById('pwd-new').value = '';
-        document.getElementById('pwd-confirm').value = '';
-    });
+    await saveUser({ id, senha: nova });
+    showToast('Senha alterada com sucesso!', 'success');
+    renderConfiguracoes();
+  });
 }

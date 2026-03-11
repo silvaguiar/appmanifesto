@@ -8,16 +8,18 @@ import { showToast } from '../components/toast.js';
 
 let searchTerm = '';
 
-export function renderMotoristas() {
-    const content = document.getElementById('page-content');
-    const motoristas = getMotoristas().filter(m => {
-        if (!searchTerm) return true;
-        const term = searchTerm.toLowerCase();
-        return m.nome.toLowerCase().includes(term) ||
-            m.cpf.includes(term.replace(/\D/g, ''));
-    });
+export async function renderMotoristas() {
+  const content = document.getElementById('page-content');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const allMotoristas = await getMotoristas();
+  const motoristas = allMotoristas.filter(m => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return m.nome.toLowerCase().includes(term) ||
+      m.cpf.includes(term.replace(/\D/g, ''));
+  });
 
-    content.innerHTML = `
+  content.innerHTML = `
     <div class="fade-in">
       <div class="page-header page-header-actions">
         <div>
@@ -91,31 +93,31 @@ export function renderMotoristas() {
     </div>
   `;
 
-    // Event listeners
-    document.getElementById('btn-novo-motorista')?.addEventListener('click', () => openMotoristaModal());
-    document.getElementById('btn-empty-novo-motorista')?.addEventListener('click', () => openMotoristaModal());
-    document.getElementById('search-motorista')?.addEventListener('input', (e) => {
-        searchTerm = e.target.value;
-        renderMotoristas();
-    });
+  // Event listeners
+  document.getElementById('btn-novo-motorista')?.addEventListener('click', () => openMotoristaModal());
+  document.getElementById('btn-empty-novo-motorista')?.addEventListener('click', () => openMotoristaModal());
+  document.getElementById('search-motorista')?.addEventListener('input', (e) => {
+    searchTerm = e.target.value;
+    renderMotoristas();
+  });
 
-    document.querySelectorAll('.btn-edit-motorista').forEach(btn => {
-        btn.addEventListener('click', () => openMotoristaModal(btn.dataset.id));
-    });
+  document.querySelectorAll('.btn-edit-motorista').forEach(btn => {
+    btn.addEventListener('click', () => openMotoristaModal(btn.dataset.id));
+  });
 
-    document.querySelectorAll('.btn-delete-motorista').forEach(btn => {
-        btn.addEventListener('click', () => confirmDeleteMotorista(btn.dataset.id));
-    });
+  document.querySelectorAll('.btn-delete-motorista').forEach(btn => {
+    btn.addEventListener('click', () => confirmDeleteMotorista(btn.dataset.id));
+  });
 }
 
-function openMotoristaModal(editId = null) {
-    const motorista = editId ? getMotoristaById(editId) : {};
-    const isEdit = !!editId;
+async function openMotoristaModal(editId = null) {
+  const motorista = editId ? await getMotoristaById(editId) : {};
+  const isEdit = !!editId;
 
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.id = 'motorista-modal';
-    overlay.innerHTML = `
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'motorista-modal';
+  overlay.innerHTML = `
     <div class="modal">
       <div class="modal-header">
         <h3>${isEdit ? 'Editar Motorista' : 'Novo Motorista'}</h3>
@@ -171,68 +173,68 @@ function openMotoristaModal(editId = null) {
     </div>
   `;
 
-    document.body.appendChild(overlay);
+  document.body.appendChild(overlay);
 
-    // CPF formatting
-    const cpfInput = document.getElementById('mot-cpf');
-    cpfInput.addEventListener('input', () => {
-        cpfInput.value = formatarCPF(cpfInput.value);
-        document.getElementById('cpf-error').style.display = 'none';
-        cpfInput.classList.remove('error');
-    });
+  // CPF formatting
+  const cpfInput = document.getElementById('mot-cpf');
+  cpfInput.addEventListener('input', () => {
+    cpfInput.value = formatarCPF(cpfInput.value);
+    document.getElementById('cpf-error').style.display = 'none';
+    cpfInput.classList.remove('error');
+  });
 
-    // Phone formatting
-    const telInput = document.getElementById('mot-telefone');
-    telInput.addEventListener('input', () => {
-        telInput.value = formatarTelefone(telInput.value);
-    });
+  // Phone formatting
+  const telInput = document.getElementById('mot-telefone');
+  telInput.addEventListener('input', () => {
+    telInput.value = formatarTelefone(telInput.value);
+  });
 
-    // Close
-    const closeModal = () => overlay.remove();
-    document.getElementById('close-motorista-modal').addEventListener('click', closeModal);
-    document.getElementById('cancel-motorista-modal').addEventListener('click', closeModal);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+  // Close
+  const closeModal = () => overlay.remove();
+  document.getElementById('close-motorista-modal').addEventListener('click', closeModal);
+  document.getElementById('cancel-motorista-modal').addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
 
-    // Save
-    document.getElementById('save-motorista').addEventListener('click', () => {
-        const nome = document.getElementById('mot-nome').value.trim();
-        const cpfRaw = document.getElementById('mot-cpf').value.replace(/\D/g, '');
-        const telefone = document.getElementById('mot-telefone').value.replace(/\D/g, '');
-        const cnh = document.getElementById('mot-cnh').value.trim();
-        const categoriaCnh = document.getElementById('mot-categoria-cnh').value;
-        const ufCnh = document.getElementById('mot-uf-cnh').value;
+  // Save
+  document.getElementById('save-motorista').addEventListener('click', async () => {
+    const nome = document.getElementById('mot-nome').value.trim();
+    const cpfRaw = document.getElementById('mot-cpf').value.replace(/\D/g, '');
+    const telefone = document.getElementById('mot-telefone').value.replace(/\D/g, '');
+    const cnh = document.getElementById('mot-cnh').value.trim();
+    const categoriaCnh = document.getElementById('mot-categoria-cnh').value;
+    const ufCnh = document.getElementById('mot-uf-cnh').value;
 
-        if (!nome || !cpfRaw || !cnh || !categoriaCnh) {
-            showToast('Preencha todos os campos obrigatórios', 'error');
-            return;
-        }
+    if (!nome || !cpfRaw || !cnh || !categoriaCnh) {
+      showToast('Preencha todos os campos obrigatórios', 'error');
+      return;
+    }
 
-        if (!validarCPF(cpfRaw)) {
-            document.getElementById('cpf-error').style.display = 'block';
-            cpfInput.classList.add('error');
-            showToast('CPF inválido', 'error');
-            return;
-        }
+    if (!validarCPF(cpfRaw)) {
+      document.getElementById('cpf-error').style.display = 'block';
+      cpfInput.classList.add('error');
+      showToast('CPF inválido', 'error');
+      return;
+    }
 
-        const data = {
-            nome, cpf: cpfRaw, telefone, cnh, categoriaCnh, ufCnh,
-            ...(isEdit ? { id: editId } : {})
-        };
+    const data = {
+      nome, cpf: cpfRaw, telefone, cnh, categoriaCnh, ufCnh,
+      ...(isEdit ? { id: editId } : {})
+    };
 
-        saveMotorista(data);
-        showToast(isEdit ? 'Motorista atualizado com sucesso!' : 'Motorista cadastrado com sucesso!', 'success');
-        closeModal();
-        renderMotoristas();
-    });
+    await saveMotorista(data);
+    showToast(isEdit ? 'Motorista atualizado com sucesso!' : 'Motorista cadastrado com sucesso!', 'success');
+    closeModal();
+    renderMotoristas();
+  });
 }
 
-function confirmDeleteMotorista(id) {
-    const motorista = getMotoristaById(id);
-    if (!motorista) return;
+async function confirmDeleteMotorista(id) {
+  const motorista = await getMotoristaById(id);
+  if (!motorista) return;
 
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
     <div class="modal" style="max-width:420px">
       <div class="modal-body text-center" style="padding:32px">
         <div class="confirm-icon text-danger">
@@ -253,15 +255,15 @@ function confirmDeleteMotorista(id) {
     </div>
   `;
 
-    document.body.appendChild(overlay);
+  document.body.appendChild(overlay);
 
-    document.getElementById('cancel-delete').addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  document.getElementById('cancel-delete').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
-    document.getElementById('confirm-delete').addEventListener('click', () => {
-        deleteMotorista(id);
-        showToast('Motorista excluído', 'success');
-        overlay.remove();
-        renderMotoristas();
-    });
+  document.getElementById('confirm-delete').addEventListener('click', async () => {
+    await deleteMotorista(id);
+    showToast('Motorista excluído', 'success');
+    overlay.remove();
+    renderMotoristas();
+  });
 }

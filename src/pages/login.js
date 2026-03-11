@@ -47,15 +47,19 @@ export function renderLogin() {
         </div>
     `;
 
-    document.getElementById('login-form').addEventListener('submit', (e) => {
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const user = document.getElementById('username').value;
         const pass = document.getElementById('password').value;
-        
-        if (window.handleLogin(user, pass)) {
-            // Success - handeled by window due to app structure
-        } else {
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Acessando...';
+
+        const success = await window.handleLogin(user, pass);
+        if (!success) {
             document.getElementById('login-error').style.display = 'block';
+            btn.disabled = false;
+            btn.innerHTML = '<span>Acessar Sistema</span><i class="fa-solid fa-arrow-right"></i>';
         }
     });
 }

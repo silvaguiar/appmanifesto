@@ -1,14 +1,15 @@
-import { getMDFes, getMotoristaById, getVeiculoById, getMDFeById } from '../store/dataStore.js';
+import { getMDFes, getMotoristaById, getVeiculoById, getMDFeById, deleteMDFe, updateMDFeStatus, getEmpresa, getMotoristas, getVeiculos } from '../store/dataStore.js';
 import { formatarCPF, formatarChaveAcesso, UFS } from '../utils/validators.js';
 import { showToast } from '../components/toast.js';
-import * as store from '../store/dataStore.js';
 import * as focus from '../services/focusNfe.js';
 import { navigate } from '../router.js';
 
 let filterStatus = 'todos';
 let searchTerm = '';
+let cacheMotoristas = [];
+let cacheVeiculos = [];
 
-export function renderMDFeLista() {
+export async function renderMDFeLista() {
   // Check if a filter was set by the dashboard cards
   if (window.mdfeFilter) {
     filterStatus = window.mdfeFilter;
@@ -16,14 +17,25 @@ export function renderMDFeLista() {
   }
 
   const content = document.getElementById('page-content');
-  let mdfes = getMDFes().sort((a, b) => new Date(b.criadoEm) - new Date(a.criadoEm));
+  content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  const [allMdfes, allMotoristas, allVeiculos] = await Promise.all([
+    getMDFes(),
+    getMotoristas(),
+    getVeiculos()
+  ]);
+
+  cacheMotoristas = allMotoristas;
+  cacheVeiculos = allVeiculos;
+
+  let mdfes = allMdfes.sort((a, b) => new Date(b.criadoEm) - new Date(a.criadoEm));
 
   if (filterStatus !== 'todos') mdfes = mdfes.filter(m => m.status === filterStatus);
   if (searchTerm) {
     const t = searchTerm.toLowerCase();
     mdfes = mdfes.filter(m => {
-      const mot = getMotoristaById(m.motoristaId);
-      return String(m.numero).includes(t) || (mot && mot.nome.toLowerCase().includes(t)) || (m.chaveAcesso || '').includes(t);
+      const mot = cacheMotoristas.find(x => x.id === m.motoristaId);
+      return String(m.numero).includes(t) || (mot && mot.nome.toLowerCase().includes(t)) || (m.chaveMdfe || m.chaveAcesso || '').includes(t);
     });
   }
 
@@ -33,7 +45,7 @@ export function renderMDFeLista() {
   content.innerHTML = `<div class="fade-in">
     <div class="page-header page-header-actions">
       <div><h2>MDF-e Emitidos</h2><p>Consulte e gerencie os manifestos eletrônicos</p></div>
-      <button class="btn btn-primary" onclick="navigateTo('/mdfe-emissao')"><i class="fa-solid fa-plus"></i> Novo MDF-e</button>
+      <button class="btn btn-primary" id="btn-novo-mdfe"><i class="fa-solid fa-plus"></i> Novo MDF-e</button>
     </div>
     <div class="toolbar">
       <div class="search-bar"><i class="fa-solid fa-search"></i><input type="text" class="form-control" id="search-mdfe" placeholder="Buscar por nº, motorista..." value="${searchTerm}"></div>
@@ -48,8 +60,8 @@ export function renderMDFeLista() {
       <th>Número</th><th>Data</th><th>Motorista</th><th>Veículo</th><th>Rota</th><th>Valor</th><th>Status</th><th style="width:200px">Ações</th>
     </tr></thead><tbody>
       ${mdfes.map(m => {
-    const mot = getMotoristaById(m.motoristaId);
-    const veic = getVeiculoById(m.veiculoId);
+    const mot = cacheMotoristas.find(x => x.id === m.motoristaId);
+    const veic = cacheVeiculos.find(x => x.id === m.veiculoId);
     const dt = new Date(m.dtEmissao || m.criadoEm).toLocaleDateString('pt-BR');
     return `<tr>
           <td style="font-weight:700;color:var(--text-primary);font-family:monospace">${m.numeroSefaz || String(m.numero).padStart(6, '0')}</td>
@@ -92,6 +104,7 @@ export function renderMDFeLista() {
   </div>`;
 
   // Events
+  document.getElementById('btn-novo-mdfe')?.addEventListener('click', () => navigate('/mdfe-emissao'));
   document.getElementById('search-mdfe')?.addEventListener('input', e => { searchTerm = e.target.value; renderMDFeLista(); });
   document.querySelectorAll('.filter-pill').forEach(p => p.addEventListener('click', () => { filterStatus = p.dataset.filter; renderMDFeLista(); }));
   document.querySelectorAll('.btn-view').forEach(b => b.addEventListener('click', () => viewMDFe(b.dataset.id)));
@@ -106,19 +119,21 @@ export function renderMDFeLista() {
 }
 
 // ---- Duplicar MDF-e ----
-function doDuplicar(id) {
-  const m = getMDFeById(id);
+async function doDuplicar(id) {
+  const m = await getMDFeById(id);
   if (!m) return;
-  
+
   // Clone object
   const clone = JSON.parse(JSON.stringify(m));
-  
+
   // Remove fields specific to the old emission
   delete clone.id;
   delete clone.numero;
   delete clone.numeroSefaz;
+  delete clone.chaveMdfe;
   delete clone.chaveAcesso;
   delete clone.caminhoDAMDFE;
+  delete clone.caminhoXml;
   delete clone.status;
   delete clone.dtEmissao;
   delete clone.dtEncerramento;
@@ -126,7 +141,7 @@ function doDuplicar(id) {
   delete clone.focusRef;
   delete clone.statusSefaz;
   delete clone.mensagemSefaz;
-  
+
   // Create an explicit draft via window variable for `mdfe-emissao.js`
   window.mdfeDraftData = clone;
   showToast('MDF-e duplicado! Você pode alterar os dados agora.', 'success');
@@ -134,24 +149,27 @@ function doDuplicar(id) {
 }
 
 // ---- Excluir MDF-e local (sem vínculo SEFAZ) ----
-function doDeleteLocal(id) {
-  const m = getMDFeById(id); if (!m) return;
+async function doDeleteLocal(id) {
+  const m = await getMDFeById(id); if (!m) return;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
-  overlay.innerHTML = `<div class="modal" style="max-width:420px"><div class="modal-header"><h3><i class="fa-solid fa-trash" style="color:var(--danger);margin-right:8px"></i>Excluir MDF-e</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()"><i class="fa-solid fa-xmark"></i></button></div>
+  overlay.innerHTML = `<div class="modal" style="max-width:420px"><div class="modal-header"><h3><i class="fa-solid fa-trash" style="color:var(--danger);margin-right:8px"></i>Excluir MDF-e</h3><button class="modal-close" id="close-del-local"><i class="fa-solid fa-xmark"></i></button></div>
     <div class="modal-body">
       <div style="padding:14px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.2);border-radius:var(--radius-md);margin-bottom:16px;display:flex;align-items:center;gap:10px">
         <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger);font-size:1.2rem"></i>
-        <span style="font-size:0.88rem;color:var(--text-secondary)">Este MDF-e <strong>não foi enviado à SEFAZ</strong> e será excluído apenas localmente.</span>
+        <span style="font-size:0.88rem;color:var(--text-secondary)">Este MDF-e <strong>não foi enviado à SEFAZ</strong> e será excluído apenas no banco.</span>
       </div>
       <div style="font-size:0.85rem;color:var(--text-muted)">MDF-e nº <strong>${m.numeroSefaz || String(m.numero).padStart(6, '0')}</strong> será removido permanentemente.</div>
     </div>
-    <div class="modal-footer"><button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancelar</button><button class="btn btn-danger" id="btn-confirm-delete"><i class="fa-solid fa-trash"></i> Excluir</button></div>
+    <div class="modal-footer"><button class="btn btn-secondary" id="cancel-del-local">Cancelar</button><button class="btn btn-danger" id="btn-confirm-delete"><i class="fa-solid fa-trash"></i> Excluir</button></div>
   </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  document.getElementById('btn-confirm-delete').addEventListener('click', () => {
-    store.deleteMDFe(id);
+  document.getElementById('close-del-local').addEventListener('click', () => overlay.remove());
+  document.getElementById('cancel-del-local').addEventListener('click', () => overlay.remove());
+
+  document.getElementById('btn-confirm-delete').addEventListener('click', async () => {
+    await deleteMDFe(id);
     showToast('MDF-e excluído', 'warning');
     overlay.remove();
     renderMDFeLista();
@@ -160,30 +178,32 @@ function doDeleteLocal(id) {
 
 // ---- Reprocessar MDF-e ----
 async function doReprocessar(id) {
-  const m = getMDFeById(id); if (!m) return;
-  
+  const m = await getMDFeById(id); if (!m) return;
+
   if (!focus.isConfigured()) {
     showToast('API Focus NFe não está configurada.', 'error');
     return;
   }
 
   const num = m.numeroSefaz || String(m.numero).padStart(6, '0');
-  
+
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
-  overlay.innerHTML = `<div class="modal" style="max-width:420px"><div class="modal-header"><h3><i class="fa-solid fa-paper-plane" style="color:var(--primary);margin-right:8px"></i>Reprocessar MDF-e</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()"><i class="fa-solid fa-xmark"></i></button></div>
+  overlay.innerHTML = `<div class="modal" style="max-width:420px"><div class="modal-header"><h3><i class="fa-solid fa-paper-plane" style="color:var(--primary);margin-right:8px"></i>Reprocessar MDF-e</h3><button class="modal-close" id="close-rep"><i class="fa-solid fa-xmark"></i></button></div>
     <div class="modal-body">
       <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:16px">Deseja reenviar este MDF-e para a SEFAZ utilizando os dados originais?</p>
       <div style="font-size:0.85rem;color:var(--text-muted)">MDF-e nº <strong>${num}</strong> será reenviado.</div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+      <button class="btn btn-secondary" id="cancel-rep">Cancelar</button>
       <button class="btn btn-primary" id="btn-confirm-reprocess"><i class="fa-solid fa-paper-plane"></i> Reenviar</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  
+  document.getElementById('close-rep').addEventListener('click', () => overlay.remove());
+  document.getElementById('cancel-rep').addEventListener('click', () => overlay.remove());
+
   document.getElementById('btn-confirm-reprocess').addEventListener('click', async () => {
     const btnConfirm = document.getElementById('btn-confirm-reprocess');
     btnConfirm.disabled = true;
@@ -191,28 +211,27 @@ async function doReprocessar(id) {
 
     try {
       showToast('Reprocessando MDF-e...', 'info');
-      
-      const empresa = store.getEmpresa();
-      const motorista = store.getMotoristaById(m.motoristaId);
-      const veiculo = store.getVeiculoById(m.veiculoId);
-      
+
+      const empresa = await getEmpresa();
+      const motorista = await getMotoristaById(m.motoristaId);
+      const veiculo = await getVeiculoById(m.veiculoId);
+
       const payload = focus.montarPayloadMDFe(m, motorista, veiculo, empresa);
       const ref = m.focusRef || m.id;
-      
+
       const result = await focus.emitirMDFe(ref, payload);
-      
-      const mdfes = store.getMDFes();
-      const idx = mdfes.findIndex(x => x.id === id);
-      if (idx !== -1) {
-        mdfes[idx].focusRef = ref;
-        mdfes[idx].status = result.status || 'processando_autorizacao';
-        mdfes[idx].statusSefaz = result.status_sefaz;
-        mdfes[idx].mensagemSefaz = result.mensagem_sefaz;
-        if (result.chave_mdfe) mdfes[idx].chaveAcesso = result.chave_mdfe;
-        if (result.numero) mdfes[idx].numeroSefaz = result.numero;
-        if (result.caminho_damdfe) mdfes[idx].caminhoDAMDFE = result.caminho_damdfe;
-        localStorage.setItem('mdfe_mdfes', JSON.stringify(mdfes));
-      }
+
+      const updates = {
+        focusRef: ref,
+        status: result.status || 'processando_autorizacao',
+        statusSefaz: result.status_sefaz,
+        mensagemSefaz: result.mensagem_sefaz,
+        chaveMdfe: result.chave_mdfe,
+        numeroSefaz: result.numero,
+        caminhoDAMDFE: result.caminho_damdfe
+      };
+
+      await updateMDFeStatus(id, updates);
 
       if (result.status === 'erro_autorizacao') {
         showToast(`Rejeição: ${result.mensagem_sefaz}`, 'error');
@@ -221,7 +240,7 @@ async function doReprocessar(id) {
       } else {
         showToast('MDF-e enviado para processamento.', 'success');
       }
-      
+
       overlay.remove();
       renderMDFeLista();
     } catch (err) {
@@ -231,7 +250,6 @@ async function doReprocessar(id) {
     }
   });
 }
-
 
 function getStatusBadge(status) {
   const map = {
@@ -245,10 +263,10 @@ function getStatusBadge(status) {
   return map[status] || `<span class="badge badge-info">${status}</span>`;
 }
 
-function viewMDFe(id) {
-  const m = getMDFeById(id); if (!m) return;
-  const mot = getMotoristaById(m.motoristaId);
-  const veic = getVeiculoById(m.veiculoId);
+async function viewMDFe(id) {
+  const m = await getMDFeById(id); if (!m) return;
+  const mot = await getMotoristaById(m.motoristaId);
+  const veic = await getVeiculoById(m.veiculoId);
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `<div class="modal modal-lg"><div class="modal-header"><h3>MDF-e nº ${m.numeroSefaz || String(m.numero).padStart(6, '0')}</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()"><i class="fa-solid fa-xmark"></i></button></div>
@@ -260,7 +278,7 @@ function viewMDFe(id) {
       </div>`: ''}
       <div class="detail-grid">
         <div class="detail-item"><div class="detail-item-label">Status</div><div class="detail-item-value">${getStatusBadge(m.status)}</div></div>
-        <div class="detail-item"><div class="detail-item-label">Chave de Acesso</div><div class="detail-item-value" style="font-family:monospace;font-size:0.82rem">${m.chaveMdfe ? formatarChaveAcesso(m.chaveMdfe) : formatarChaveAcesso(m.chaveAcesso || '')}</div></div>
+        <div class="detail-item"><div class="detail-item-label">Chave de Acesso</div><div class="detail-item-value" style="font-family:monospace;font-size:0.82rem">${m.chaveMdfe || m.chaveAcesso || '-'}</div></div>
         <div class="detail-item"><div class="detail-item-label">Data Emissão</div><div class="detail-item-value">${new Date(m.dtEmissao || m.criadoEm).toLocaleString('pt-BR')}</div></div>
         <div class="detail-item"><div class="detail-item-label">Rota</div><div class="detail-item-value">${m.ufInicio} → ${(m.percurso || []).join(' → ')}${(m.percurso || []).length ? ' → ' : ''}${m.ufFim}</div></div>
         <div class="detail-item"><div class="detail-item-label">Motorista</div><div class="detail-item-value">${mot ? `${mot.nome} (CPF: ${formatarCPF(mot.cpf)})` : '-'}</div></div>
@@ -281,15 +299,13 @@ function viewMDFe(id) {
 
 // ---- DAMDFE Print ----
 async function printDAMDFE(id) {
-  const m = getMDFeById(id); if (!m) return;
+  const m = await getMDFeById(id); if (!m) return;
 
   if (m.caminhoDAMDFE) {
-    // Open the DAMDFE PDF from Focus NFe
     window.open(m.caminhoDAMDFE, '_blank');
     return;
   }
 
-  // Try to get from Focus NFe
   if (!focus.isConfigured()) {
     showToast('Configure a API Focus NFe para imprimir o DAMDFE', 'warning');
     return;
@@ -299,13 +315,7 @@ async function printDAMDFE(id) {
     showToast('Obtendo DAMDFE...', 'info');
     const result = await focus.consultarMDFe(m.focusRef || m.id);
     if (result.caminho_damdfe) {
-      // Save for future use
-      const mdfes = store.getMDFes();
-      const idx = mdfes.findIndex(x => x.id === id);
-      if (idx !== -1) {
-        mdfes[idx].caminhoDAMDFE = result.caminho_damdfe;
-        localStorage.setItem('mdfe_mdfes', JSON.stringify(mdfes));
-      }
+      await updateMDFeStatus(id, { caminhoDAMDFE: result.caminho_damdfe });
       window.open(result.caminho_damdfe, '_blank');
     } else {
       showToast('DAMDFE não disponível ainda', 'warning');
@@ -316,11 +326,11 @@ async function printDAMDFE(id) {
 }
 
 // ---- Encerrar MDF-e na SEFAZ ----
-function doEncerrar(id) {
-  const m = getMDFeById(id); if (!m) return;
+async function doEncerrar(id) {
+  const m = await getMDFeById(id); if (!m) return;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
-  overlay.innerHTML = `<div class="modal" style="max-width:480px"><div class="modal-header"><h3><i class="fa-solid fa-lock" style="color:var(--warning);margin-right:8px"></i>Encerrar MDF-e</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()"><i class="fa-solid fa-xmark"></i></button></div>
+  overlay.innerHTML = `<div class="modal" style="max-width:480px"><div class="modal-header"><h3><i class="fa-solid fa-lock" style="color:var(--warning);margin-right:8px"></i>Encerrar MDF-e</h3><button class="modal-close" id="close-enc"><i class="fa-solid fa-xmark"></i></button></div>
     <div class="modal-body">
       <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:16px">Informe os dados do encerramento para registrar na SEFAZ:</p>
       <div class="form-group"><label class="form-label">Data do Encerramento *</label><input type="date" class="form-control" id="enc-data" value="${new Date().toISOString().slice(0, 10)}"></div>
@@ -329,10 +339,12 @@ function doEncerrar(id) {
         <div class="form-group"><label class="form-label">Município *</label><input type="text" class="form-control" id="enc-mun" value="${m.munDescarregamento || ''}" placeholder="Município"></div>
       </div>
     </div>
-    <div class="modal-footer"><button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancelar</button><button class="btn btn-success" id="btn-enc-confirm"><i class="fa-solid fa-lock"></i> Encerrar na SEFAZ</button></div>
+    <div class="modal-footer"><button class="btn btn-secondary" id="cancel-enc">Cancelar</button><button class="btn btn-success" id="btn-enc-confirm"><i class="fa-solid fa-lock"></i> Encerrar na SEFAZ</button></div>
   </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.getElementById('close-enc').addEventListener('click', () => overlay.remove());
+  document.getElementById('cancel-enc').addEventListener('click', () => overlay.remove());
 
   document.getElementById('btn-enc-confirm').addEventListener('click', async () => {
     const data = document.getElementById('enc-data').value;
@@ -341,8 +353,7 @@ function doEncerrar(id) {
     if (!data || !uf || !mun) { showToast('Preencha todos os campos', 'error'); return; }
 
     if (!focus.isConfigured()) {
-      // Local only
-      store.encerrarMDFe(id);
+      await updateMDFeStatus(id, { status: 'encerrado', dtEncerramento: new Date().toISOString() });
       showToast('MDF-e encerrado (local)', 'success');
       overlay.remove(); renderMDFeLista(); return;
     }
@@ -352,16 +363,13 @@ function doEncerrar(id) {
       btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Encerrando...';
       const result = await focus.encerrarMDFe(m.focusRef || m.id, { data, sigla_uf: uf, nome_municipio: mun });
 
-      // Update local
-      const mdfes = store.getMDFes();
-      const idx = mdfes.findIndex(x => x.id === id);
-      if (idx !== -1) {
-        mdfes[idx].status = result.status || 'encerrado';
-        mdfes[idx].statusSefaz = result.status_sefaz;
-        mdfes[idx].mensagemSefaz = result.mensagem_sefaz;
-        mdfes[idx].dtEncerramento = new Date().toISOString();
-        localStorage.setItem('mdfe_mdfes', JSON.stringify(mdfes));
-      }
+      await updateMDFeStatus(id, {
+        status: result.status || 'encerrado',
+        statusSefaz: result.status_sefaz,
+        mensagemSefaz: result.mensagem_sefaz,
+        dtEncerramento: new Date().toISOString()
+      });
+
       showToast('MDF-e encerrado na SEFAZ!', 'success');
       overlay.remove(); renderMDFeLista();
     } catch (err) {
@@ -373,19 +381,22 @@ function doEncerrar(id) {
 }
 
 // ---- Cancelar MDF-e na SEFAZ ----
-function doCancelar(id) {
+async function doCancelar(id) {
+  const m = await getMDFeById(id); if (!m) return;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
-  overlay.innerHTML = `<div class="modal" style="max-width:460px"><div class="modal-header"><h3><i class="fa-solid fa-ban" style="color:var(--danger);margin-right:8px"></i>Cancelar MDF-e</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()"><i class="fa-solid fa-xmark"></i></button></div>
+  overlay.innerHTML = `<div class="modal" style="max-width:460px"><div class="modal-header"><h3><i class="fa-solid fa-ban" style="color:var(--danger);margin-right:8px"></i>Cancelar MDF-e</h3><button class="modal-close" id="close-canc"><i class="fa-solid fa-xmark"></i></button></div>
     <div class="modal-body">
       <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:16px">Esta ação será registrada na SEFAZ e não pode ser desfeita.</p>
       <div class="form-group"><label class="form-label">Justificativa (15-255 caracteres) *</label><textarea class="form-control" id="canc-just" placeholder="Informe o motivo do cancelamento..." minlength="15" maxlength="255"></textarea>
         <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;text-align:right"><span id="canc-count">0</span>/255</div></div>
     </div>
-    <div class="modal-footer"><button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Voltar</button><button class="btn btn-danger" id="btn-canc-confirm"><i class="fa-solid fa-ban"></i> Cancelar MDF-e</button></div>
+    <div class="modal-footer"><button class="btn btn-secondary" id="cancel-canc">Voltar</button><button class="btn btn-danger" id="btn-canc-confirm"><i class="fa-solid fa-ban"></i> Cancelar MDF-e</button></div>
   </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.getElementById('close-canc').addEventListener('click', () => overlay.remove());
+  document.getElementById('cancel-canc').addEventListener('click', () => overlay.remove());
 
   document.getElementById('canc-just').addEventListener('input', e => {
     document.getElementById('canc-count').textContent = e.target.value.length;
@@ -394,10 +405,9 @@ function doCancelar(id) {
   document.getElementById('btn-canc-confirm').addEventListener('click', async () => {
     const just = document.getElementById('canc-just').value.trim();
     if (just.length < 15) { showToast('Justificativa deve ter no mínimo 15 caracteres', 'error'); return; }
-    const m = getMDFeById(id);
 
     if (!focus.isConfigured()) {
-      store.cancelarMDFe(id);
+      await updateMDFeStatus(id, { status: 'cancelado', dtCancelamento: new Date().toISOString() });
       showToast('MDF-e cancelado (local)', 'warning');
       overlay.remove(); renderMDFeLista(); return;
     }
@@ -407,15 +417,13 @@ function doCancelar(id) {
       btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cancelando...';
       const result = await focus.cancelarMDFe(m.focusRef || m.id, just);
 
-      const mdfes = store.getMDFes();
-      const idx = mdfes.findIndex(x => x.id === id);
-      if (idx !== -1) {
-        mdfes[idx].status = result.status || 'cancelado';
-        mdfes[idx].statusSefaz = result.status_sefaz;
-        mdfes[idx].mensagemSefaz = result.mensagem_sefaz;
-        mdfes[idx].dtCancelamento = new Date().toISOString();
-        localStorage.setItem('mdfe_mdfes', JSON.stringify(mdfes));
-      }
+      await updateMDFeStatus(id, {
+        status: result.status || 'cancelado',
+        statusSefaz: result.status_sefaz,
+        mensagemSefaz: result.mensagem_sefaz,
+        dtCancelamento: new Date().toISOString()
+      });
+
       showToast('MDF-e cancelado na SEFAZ', 'warning');
       overlay.remove(); renderMDFeLista();
     } catch (err) {
@@ -428,26 +436,23 @@ function doCancelar(id) {
 
 // ---- Refresh (consultar status) ----
 async function refreshStatus(id) {
-  const m = getMDFeById(id); if (!m) return;
+  const m = await getMDFeById(id); if (!m) return;
   if (!focus.isConfigured()) { showToast('Configure a API Focus NFe', 'warning'); return; }
 
   try {
     showToast('Consultando SEFAZ...', 'info');
     const result = await focus.consultarMDFe(m.focusRef || m.id);
 
-    const mdfes = store.getMDFes();
-    const idx = mdfes.findIndex(x => x.id === id);
-    if (idx !== -1) {
-      mdfes[idx].status = result.status;
-      mdfes[idx].statusSefaz = result.status_sefaz;
-      mdfes[idx].mensagemSefaz = result.mensagem_sefaz;
-      if (result.chave_mdfe) mdfes[idx].chaveMdfe = result.chave_mdfe;
-      if (result.numero) mdfes[idx].numeroSefaz = result.numero;
-      if (result.serie) mdfes[idx].serieSefaz = result.serie;
-      if (result.caminho_damdfe) mdfes[idx].caminhoDAMDFE = result.caminho_damdfe;
-      if (result.caminho_xml) mdfes[idx].caminhoXml = result.caminho_xml;
-      localStorage.setItem('mdfe_mdfes', JSON.stringify(mdfes));
-    }
+    await updateMDFeStatus(id, {
+      status: result.status,
+      statusSefaz: result.status_sefaz,
+      mensagemSefaz: result.mensagem_sefaz,
+      chaveMdfe: result.chave_mdfe,
+      numeroSefaz: result.numero,
+      serieSefaz: result.serie,
+      caminhoDAMDFE: result.caminho_damdfe,
+      caminhoXml: result.caminho_xml
+    });
 
     showToast(`Status: ${result.status} - ${result.mensagem_sefaz || ''}`, 'success');
     renderMDFeLista();
@@ -457,14 +462,14 @@ async function refreshStatus(id) {
 }
 
 // ---- Manutenção (editar e reenviar MDF-e rejeitado) ----
-function doManutencao(id) {
-  const m = getMDFeById(id); if (!m) return;
-  const mot = getMotoristaById(m.motoristaId);
-  const veic = getVeiculoById(m.veiculoId);
+async function doManutencao(id) {
+  const m = await getMDFeById(id); if (!m) return;
+  const mot = await getMotoristaById(m.motoristaId);
+  const veic = await getVeiculoById(m.veiculoId);
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
-  overlay.innerHTML = `<div class="modal modal-lg"><div class="modal-header"><h3><i class="fa-solid fa-wrench" style="color:var(--warning);margin-right:8px"></i>Manutenção MDF-e #${m.numeroSefaz || String(m.numero).padStart(6, '0')}</h3><button class="modal-close" onclick="this.closest('.modal-overlay').remove()"><i class="fa-solid fa-xmark"></i></button></div>
+  overlay.innerHTML = `<div class="modal modal-lg"><div class="modal-header"><h3><i class="fa-solid fa-wrench" style="color:var(--warning);margin-right:8px"></i>Manutenção MDF-e #${m.numeroSefaz || String(m.numero).padStart(6, '0')}</h3><button class="modal-close" id="close-man"><i class="fa-solid fa-xmark"></i></button></div>
     <div class="modal-body">
       <div style="padding:14px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.2);border-radius:var(--radius-md);margin-bottom:20px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><i class="fa-solid fa-triangle-exclamation" style="color:var(--danger)"></i><strong style="color:var(--danger)">Motivo da Rejeição</strong></div>
@@ -503,42 +508,37 @@ function doManutencao(id) {
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+      <button class="btn btn-secondary" id="cancel-man">Cancelar</button>
       <button class="btn btn-danger btn-sm" id="btn-man-delete" style="margin-right:auto"><i class="fa-solid fa-trash"></i> Excluir</button>
       <button class="btn btn-primary" id="btn-man-reenviar"><i class="fa-solid fa-paper-plane"></i> Salvar e Reenviar à SEFAZ</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.getElementById('close-man').addEventListener('click', () => overlay.remove());
+  document.getElementById('cancel-man').addEventListener('click', () => overlay.remove());
 
-  document.getElementById('btn-man-delete').addEventListener('click', () => {
-    store.deleteMDFe(id);
+  document.getElementById('btn-man-delete').addEventListener('click', async () => {
+    await deleteMDFe(id);
     showToast('MDF-e excluído', 'warning');
     overlay.remove(); renderMDFeLista();
   });
 
   document.getElementById('btn-man-reenviar').addEventListener('click', async () => {
-    // Update local data
-    const mdfes = store.getMDFes();
-    const idx = mdfes.findIndex(x => x.id === id);
-    if (idx === -1) return;
-
-    mdfes[idx].ufInicio = document.getElementById('man-uf-inicio').value;
-    mdfes[idx].ufFim = document.getElementById('man-uf-fim').value;
-    mdfes[idx].munCarregamento = document.getElementById('man-mun-c').value;
-    mdfes[idx].munDescarregamento = document.getElementById('man-mun-d').value;
-    mdfes[idx].codMunCarregamento = document.getElementById('man-cod-c').value;
-    mdfes[idx].codMunDescarregamento = document.getElementById('man-cod-d').value;
-    mdfes[idx].pesoBruto = document.getElementById('man-peso').value;
-    mdfes[idx].valorCarga = document.getElementById('man-valor').value;
-    mdfes[idx].infoComplementar = document.getElementById('man-info').value;
-    localStorage.setItem('mdfe_mdfes', JSON.stringify(mdfes));
-
-    const updatedM = mdfes[idx];
+    const dataUpdates = {
+      ufInicio: document.getElementById('man-uf-inicio').value,
+      ufFim: document.getElementById('man-uf-fim').value,
+      munCarregamento: document.getElementById('man-mun-c').value,
+      munDescarregamento: document.getElementById('man-mun-d').value,
+      codMunCarregamento: document.getElementById('man-cod-c').value,
+      codMunDescarregamento: document.getElementById('man-cod-d').value,
+      pesoBruto: document.getElementById('man-peso').value,
+      valorCarga: document.getElementById('man-valor').value,
+      infoComplementar: document.getElementById('man-info').value
+    };
 
     if (!focus.isConfigured()) {
-      updatedM.status = 'autorizado';
-      localStorage.setItem('mdfe_mdfes', JSON.stringify(mdfes));
+      await updateMDFeStatus(id, { ...dataUpdates, status: 'autorizado' });
       showToast('MDF-e atualizado (local)', 'success');
       overlay.remove(); renderMDFeLista(); return;
     }
@@ -547,20 +547,23 @@ function doManutencao(id) {
       const btn = document.getElementById('btn-man-reenviar');
       btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reenviando...';
 
-      const empresa = store.getEmpresa();
-      const motorista = getMotoristaById(updatedM.motoristaId);
-      const veiculo = getVeiculoById(updatedM.veiculoId);
-      const payload = focus.montarPayloadMDFe(updatedM, motorista, veiculo, empresa);
+      const empresa = await getEmpresa();
+      const motorista = await getMotoristaById(m.motoristaId);
+      const veiculo = await getVeiculoById(m.veiculoId);
+
+      const payload = focus.montarPayloadMDFe({ ...m, ...dataUpdates }, motorista, veiculo, empresa);
 
       // Reenviar com mesma ref (Focus permite para erro_autorizacao)
-      const ref = updatedM.focusRef || updatedM.id;
+      const ref = m.focusRef || m.id;
       const result = await focus.emitirMDFe(ref, payload);
 
-      mdfes[idx].status = result.status || 'processando_autorizacao';
-      mdfes[idx].statusSefaz = result.status_sefaz;
-      mdfes[idx].mensagemSefaz = result.mensagem_sefaz;
-      if (result.chave_mdfe) mdfes[idx].chaveMdfe = result.chave_mdfe;
-      localStorage.setItem('mdfe_mdfes', JSON.stringify(mdfes));
+      await updateMDFeStatus(id, {
+        ...dataUpdates,
+        status: result.status || 'processando_autorizacao',
+        statusSefaz: result.status_sefaz,
+        mensagemSefaz: result.mensagem_sefaz,
+        chaveMdfe: result.chave_mdfe
+      });
 
       if (result.status === 'erro_autorizacao') {
         showToast(`Rejeição: ${result.mensagem_sefaz}`, 'error');
