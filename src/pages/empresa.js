@@ -227,7 +227,10 @@ async function openEmpresaModal(editId = null) {
             <h4 style="font-size:0.9rem;margin-bottom:12px;color:var(--text-primary)"><i class="fa-solid fa-key" style="color:var(--warning);margin-right:8px"></i>Integração Focus NFe (SEFAZ)</h4>
             <div class="form-group">
               <label class="form-label">Token da API <span style="font-size:0.75rem;font-weight:normal;color:var(--text-muted)">(Opcional neste momento)</span></label>
-              <input type="password" class="form-control" id="emp-focus-token" value="${emp.focusToken || emp.focus_token || ''}" placeholder="Cole aqui o token da API da Focus NFe">
+              <div style="display:flex; gap:10px">
+                <input type="password" class="form-control" id="emp-focus-token" style="flex:1" value="${emp.focusToken || emp.focus_token || ''}" placeholder="Cole aqui o token da API da Focus NFe">
+                <button type="button" class="btn btn-secondary" id="btn-test-api" title="Testar Token da API" style="padding: 11px 16px"><i class="fa-solid fa-plug" id="icon-test-api"></i></button>
+              </div>
             </div>
             <div class="form-group">
               <label class="form-label">Ambiente da SEFAZ</label>
@@ -328,6 +331,62 @@ async function openEmpresaModal(editId = null) {
       if (!window.empMunList) return;
       const cid = window.empMunList.find(c => c.nome.toLowerCase() === munInput.value.toLowerCase());
       if (cid) document.getElementById('emp-cod-municipio').value = cid.id;
+    });
+  }
+
+  // API Tester Logic
+  const btnTestApi = document.getElementById('btn-test-api');
+  if (btnTestApi) {
+    btnTestApi.addEventListener('click', async () => {
+      const token = document.getElementById('emp-focus-token').value.trim();
+      const ambiente = document.getElementById('emp-focus-ambiente').value;
+      
+      if (!token) {
+        showToast('Cole o token primeiro antes de testar.', 'warning');
+        return;
+      }
+      
+      const icon = document.getElementById('icon-test-api');
+      icon.className = 'fa-solid fa-spinner fa-spin text-primary';
+      btnTestApi.disabled = true;
+
+      try {
+        const URL_BASE = ambiente === 'producao' 
+          ? 'https://api.focusnfe.com.br' 
+          : 'https://homologacao.focusnfe.com.br';
+          
+        const response = await fetch(`${URL_BASE}/v2/empresas`, {
+          method: 'GET',
+          headers: {
+            'Authorization': 'Basic ' + btoa(token + ':')
+          }
+        });
+
+        if (response.ok) {
+          showToast('Conexão com a Focus NFe bem-sucedida!', 'success');
+          icon.className = 'fa-solid fa-check text-success';
+        } else if (response.status === 401) {
+          showToast('Token inválido ou acesso não autorizado.', 'error');
+          icon.className = 'fa-solid fa-xmark text-danger';
+        } else {
+          showToast(`Erro na API (${response.status})`, 'error');
+          icon.className = 'fa-solid fa-triangle-exclamation text-warning';
+        }
+      } catch (err) {
+        showToast('Erro de comunicação com o servidor Focus NFe', 'error');
+        icon.className = 'fa-solid fa-xmark text-danger';
+      } finally {
+        setTimeout(() => {
+          btnTestApi.disabled = false;
+          if (icon.className.includes('fa-check')) return; // keep check until edit
+          icon.className = 'fa-solid fa-plug';
+        }, 3000);
+      }
+    });
+
+    document.getElementById('emp-focus-token').addEventListener('input', () => {
+      const icon = document.getElementById('icon-test-api');
+      if (icon) icon.className = 'fa-solid fa-plug';
     });
   }
 

@@ -297,7 +297,8 @@ function mapEmpresa(row) {
         id: row.id, razaoSocial: row.razao_social, nomeFantasia: row.nome_fantasia,
         cnpj: row.cnpj, cpf: row.cpf, ie: row.ie, uf: row.uf, municipio: row.municipio,
         codMunicipio: row.cod_municipio, tipoTransporte: row.tipo_transporte, rntrc: row.rntrc,
-        telefone: row.telefone, endereco: row.endereco, cep: row.cep
+        telefone: row.telefone, endereco: row.endereco, cep: row.cep,
+        focusToken: row.focus_token, focusAmbiente: row.focus_ambiente
     };
 }
 
