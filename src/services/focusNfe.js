@@ -57,7 +57,8 @@ async function request(method, path, body = null, cfg = null) {
     if (contentType.includes('application/json')) {
         const data = await resp.json();
         if (!resp.ok && !data.status) {
-            throw new Error(data.error || data.mensagem_sefaz || `Erro HTTP ${resp.status}`);
+            const apiErrorMsg = data.mensagem || data.error || data.mensagem_sefaz || data.codigo || '';
+            throw new Error(apiErrorMsg ? `${apiErrorMsg} (HTTP ${resp.status})` : `Erro HTTP ${resp.status}`);
         }
         return data;
     }
@@ -68,6 +69,15 @@ async function request(method, path, body = null, cfg = null) {
         throw new Error(text || `Erro HTTP ${resp.status}`);
     }
     return { status: 'ok', raw: text };
+}
+
+/**
+ * Testa a conexão com a API Focus NFe enviando credenciais
+ */
+export async function testarConexao(token, ambiente) {
+    // A Focus NFe devolve 404 para GET de /v2/empresas sem ID.
+    // Para testar um token puro, o jeito mais seguro e neutro é listar os hooks
+    return request('GET', '/v2/hooks', null, { token, ambiente });
 }
 
 // ---- MDF-e Operations ----
@@ -128,7 +138,7 @@ export async function incluirCondutor(ref, dados, cfg = null) {
  * Suporta emitente pessoa física (CPF) ou jurídica (CNPJ)
  */
 export function montarPayloadMDFe(formData, motorista, veiculo, empresa) {
-    const isPessoaFisica = empresa.tipoDoc === 'cpf';
+    const isPessoaFisica = empresa.tipoDoc === 'cpf' || (empresa.cpf && empresa.cpf.trim() !== '');
     const isCargaPropria = empresa.tipoTransporte === '4';
     const tipoTransporte = isCargaPropria ? undefined : (empresa.tipoTransporte || (isPessoaFisica ? '2' : '1'));
 
@@ -205,6 +215,22 @@ export function montarPayloadMDFe(formData, motorista, veiculo, empresa) {
             informacoes_adicionais_fisco: formData.infoComplementar
         } : {}),
 
+        // Seguro de Carga (Obrigatório para prestadores de serviço - TAC/ETC/CTC)
+        // Regra SEFAZ (Rej 698): Seguro é obrigatório para Prestador de Serviço de Transporte no modal rodoviário.
+        ...(tipoTransporte && tipoTransporte !== '4' && empresa.numeroApolice ? {
+            seguros_carga: [{
+                responsavel_seguro: empresa.responsavelSeguro || '1',
+                ...(empresa.responsavelSeguro === '2' 
+                    ? (empresa.cnpj ? { cnpj_responsavel: empresa.cnpj } : { cpf_responsavel: empresa.cpf }) 
+                    : {}),
+                nome_seguradora: empresa.seguradoraNome,
+                cnpj_seguradora: (empresa.seguradoraCnpj || '').replace(/\D/g, ''),
+                numero_apolice: empresa.numeroApolice,
+                // Número de averbação é o próprio número da apólice ou um gerado
+                numero_averbacao: empresa.numeroApolice 
+            }]
+        } : {}),
+
         // Modal Rodoviário
         modal_rodoviario: {
             placa_veiculo: veiculo.placa,
@@ -222,25 +248,44 @@ export function montarPayloadMDFe(formData, motorista, veiculo, empresa) {
                 cpf: motorista.cpf.replace(/\D/g, '')
             }],
 
-            // Proprietário (se diferente do emitente e veículo tem proprietário)
-            ...(veiculo.proprietarioDoc ? (() => {
-                const doc = veiculo.proprietarioDoc.replace(/\D/g, '');
-                const emitenteDoc = (empresa.tipoDoc === 'cpf' ? (empresa.cpf || '') : (empresa.cnpj || '')).replace(/\D/g, '');
-                // Se o proprietário for o próprio emitente, a tag não deve ser enviada pelas regras da SEFAZ
-                // Se for Carga Própria (emitente = 2), enviar Proprietário (CPF) aciona a Rejeição 743 (Exigência de TAC/RNTRC). Omitimos.
-                if (doc === emitenteDoc || isCargaPropria) return {};
+            // Proprietário
+            // Regra SEFAZ (Rej 745): Se tpTransp for TAC (2) ou CTC (3), o grupo Proprietário é OBRIGATÓRIO, mesmo que seja o próprio emitente.
+            ...(() => {
+                if (isCargaPropria) return {}; // Carga própria não envia transportador, logo não preenche proprietário sob a regra 745
+                
+                let doc = (veiculo.proprietarioDoc || '').replace(/\D/g, '');
+                let nome = veiculo.proprietarioNome || '';
+                let rntrc = veiculo.proprietarioRntrc || '00000000';
+                let ie = veiculo.proprietarioIe || 'ISENTO';
+                let ufProp = veiculo.uf;
+                
+                const emitenteDoc = (isPessoaFisica ? (empresa.cpf || '') : (empresa.cnpj || '')).replace(/\D/g, '');
+                
+                // Se não há dados do proprietário do veículo, assume que o dono é o próprio emitente/motorista.
+                if (!doc) {
+                    doc = emitenteDoc;
+                    nome = empresa.razaoSocial || empresa.nomeFantasia || motorista.nome || 'PROPRIETARIO';
+                    rntrc = empresa.rntrc || '00000000';
+                    ie = empresa.ie || 'ISENTO';
+                    ufProp = empresa.uf || veiculo.uf;
+                }
+
+                // Se o emitente é ETC (1) e dono do veículo, a tag SEFAZ deve ser omitida.
+                if (tipoTransporte === '1' && doc === emitenteDoc) {
+                    return {};
+                }
                 
                 return {
-                    ...(doc.length === 11
-                        ? { cpf_proprietario_veiculo: doc }
-                        : { cnpj_proprietario_veiculo: doc }),
-                    razao_social_proprietario_veiculo: veiculo.proprietarioNome || '',
-                    rntrc_proprietario_veiculo: veiculo.proprietarioRntrc || '00000000',
-                    inscricao_estadual_proprietario_veiculo: veiculo.proprietarioIe || 'ISENTO',
-                    uf_proprietario_veiculo: veiculo.uf,
-                    tipo_proprietario_veiculo: doc.length === 11 ? '1' : '0'
+                    ...(doc.length === 11 || doc.length <= 11 // Garantir que mesmo CPFs sem 0 à esquerda tentem ir como CPF
+                        ? { cpf_proprietario_veiculo: doc.padStart(11, '0') }
+                        : { cnpj_proprietario_veiculo: doc.padStart(14, '0') }),
+                    razao_social_proprietario_veiculo: nome,
+                    rntrc_proprietario_veiculo: rntrc,
+                    inscricao_estadual_proprietario_veiculo: ie,
+                    uf_proprietario_veiculo: ufProp,
+                    tipo_proprietario_veiculo: doc.length <= 11 ? '0' : '1' // 0-TAC(CPF), 1-ETC(CNPJ), 2-CTC
                 };
-            })() : {})
+            })()
         }
     };
 

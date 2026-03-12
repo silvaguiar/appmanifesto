@@ -244,10 +244,15 @@ async function openVeiculoModal(editId = null) {
       ...(isEdit ? { id: editId } : {})
     };
 
-    await saveVeiculo(data);
-    showToast(isEdit ? 'Veículo atualizado!' : 'Veículo cadastrado!', 'success');
-    closeModal();
-    renderVeiculos();
+    try {
+      await saveVeiculo(data);
+      showToast(isEdit ? 'Veículo atualizado!' : 'Veículo cadastrado!', 'success');
+      closeModal();
+      renderVeiculos();
+    } catch (err) {
+      console.error('Erro ao salvar veículo:', err);
+      showToast('Erro ao salvar veículo: ' + err.message, 'error');
+    }
   });
 }
 

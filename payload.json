@@ -1,53 +1,61 @@
 {
-  "emitente": 2,
+  "emitente": 1,
+  "tipo_transporte": "2",
   "modal": 1,
   "serie": "1",
   "numero": null,
-  "data_emissao": "2026-03-10",
+  "data_emissao": "2026-03-12",
   "uf_inicio": "PB",
   "uf_fim": "RN",
-  "cnpj_emitente": "40950354000111",
-  "razao_social_emitente": "R V COMERCIO DE CONFECCOES LTDA",
-  "inscricao_estadual_emitente": "160941067",
+  "cpf_emitente": "01774124459",
+  "razao_social_emitente": "PAULO CESAR DA ROCHA GUIMARAES",
+  "inscricao_estadual_emitente": "ISENTO",
   "uf_emitente": "PB",
-  "municipio_emitente": "CAMPINA GRANDE",
+  "municipio_emitente": "Campina Grande",
   "codigo_municipio_emitente": "2504009",
+  "rntrc_emitente": "58671077",
   "municipios_carregamento": [
     {
       "codigo": "2504009",
-      "nome": "campina grande"
+      "nome": "Campina Grande"
     }
   ],
   "municipios_descarregamento": [
     {
-      "codigo": "2504009",
-      "nome": "campina grande",
+      "codigo": "2408102",
+      "nome": "Natal",
       "notas_fiscais": [
         {
-          "chave_nfe": "25260244498615000165550010000038441243379914"
+          "chave_nfe": "25260140950354000383550010000078241629343383"
         }
       ]
     }
   ],
   "quantidade_total_cte": 0,
   "quantidade_total_nfe": 1,
-  "valor_total_carga": 14000,
+  "valor_total_carga": 1200,
   "codigo_unidade_medida_peso_bruto": "01",
-  "peso_bruto": 115,
-  "informacoes_adicionais_fisco": "teste",
+  "peso_bruto": 500,
+  "informacoes_adicionais_fisco": "null",
   "modal_rodoviario": {
     "placa_veiculo": "OYB0I60",
     "renavam_veiculo": "01028531769",
-    "tara_veiculo": 2000,
-    "capacidade_kg_veiculo": 1500,
+    "tara_veiculo": 1770,
+    "capacidade_kg_veiculo": 1530,
     "tipo_rodado_veiculo": "04",
     "tipo_carroceria_veiculo": "02",
     "uf_licenciamento_veiculo": "PB",
     "condutores": [
       {
-        "nome": "paulo cesar da rocha guimaraes",
+        "nome": "PAULO CESAR DA ROCHA GUIMARAES",
         "cpf": "01774124459"
       }
-    ]
+    ],
+    "cpf_proprietario_veiculo": "07271833463",
+    "razao_social_proprietario_veiculo": "RENNAN VICTOR DE F PENAFORTE",
+    "rntrc_proprietario_veiculo": "00000000",
+    "inscricao_estadual_proprietario_veiculo": "ISENTO",
+    "uf_proprietario_veiculo": "PB",
+    "tipo_proprietario_veiculo": "0"
   }
 }

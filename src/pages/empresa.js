@@ -5,6 +5,7 @@
 import { getEmpresas, saveEmpresa, deleteEmpresa, getEmpresaById } from '../store/dataStore.js';
 import { validarCPF, validarCNPJ, formatarCPF, formatarCNPJ, formatarTelefone, UFS } from '../utils/validators.js';
 import { showToast } from '../components/toast.js';
+import * as focus from '../services/focusNfe.js';
 
 let searchTerm = '';
 
@@ -223,6 +224,33 @@ async function openEmpresaModal(editId = null) {
             <input type="text" class="form-control" id="emp-endereco" value="${emp.endereco || ''}" placeholder="Rua, número, bairro">
           </div>
 
+          <div id="secao-seguro" style="margin-top:20px;padding:16px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md); ${emp.tipoTransporte === '4' ? 'display:none' : ''}">
+            <h4 style="font-size:0.9rem;margin-bottom:12px;color:var(--text-primary)"><i class="fa-solid fa-shield-halved" style="color:var(--primary-400);margin-right:8px"></i>Seguro de Carga (Obrigatório p/ Transportadores)</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Responsável pelo Seguro</label>
+                <select class="form-control form-select" id="emp-seg-resp">
+                  <option value="1" ${emp.responsavelSeguro === '1' ? 'selected' : ''}>Emitente do MDF-e</option>
+                  <option value="2" ${emp.responsavelSeguro === '2' ? 'selected' : ''}>Responsável pela contratação (Contratante)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">CNPJ da Seguradora</label>
+                <input type="text" class="form-control" id="emp-seg-cnpj" value="${emp.seguradoraCnpj || ''}" placeholder="00.000.000/0000-00" maxlength="18">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Nome da Seguradora</label>
+                <input type="text" class="form-control" id="emp-seg-nome" value="${emp.seguradoraNome || ''}" placeholder="Ex: Porto Seguro">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Número da Apólice</label>
+                <input type="text" class="form-control" id="emp-seg-apolice" value="${emp.numeroApolice || ''}" placeholder="Número da apólice">
+              </div>
+            </div>
+          </div>
+
           <div style="margin-top:20px;padding:16px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md)">
             <h4 style="font-size:0.9rem;margin-bottom:12px;color:var(--text-primary)"><i class="fa-solid fa-key" style="color:var(--warning);margin-right:8px"></i>Integração Focus NFe (SEFAZ)</h4>
             <div class="form-group">
@@ -264,6 +292,7 @@ async function openEmpresaModal(editId = null) {
       if (isPF) {
         document.getElementById('emp-tipo-transp').value = '2'; // TAC
         document.getElementById('container-rntrc').style.display = '';
+        document.getElementById('secao-seguro').style.display = '';
       }
       
       const lblCpf = document.getElementById('label-tipo-cpf');
@@ -278,6 +307,7 @@ async function openEmpresaModal(editId = null) {
   document.getElementById('emp-tipo-transp').addEventListener('change', (e) => {
     const isCargaPropria = e.target.value === '4';
     document.getElementById('container-rntrc').style.display = isCargaPropria ? 'none' : '';
+    document.getElementById('secao-seguro').style.display = isCargaPropria ? 'none' : '';
     if (isCargaPropria) document.getElementById('emp-rntrc').value = '';
   });
 
@@ -351,29 +381,12 @@ async function openEmpresaModal(editId = null) {
       btnTestApi.disabled = true;
 
       try {
-        const URL_BASE = ambiente === 'producao' 
-          ? 'https://api.focusnfe.com.br' 
-          : 'https://homologacao.focusnfe.com.br';
-          
-        const response = await fetch(`${URL_BASE}/v2/empresas`, {
-          method: 'GET',
-          headers: {
-            'Authorization': 'Basic ' + btoa(token + ':')
-          }
-        });
-
-        if (response.ok) {
-          showToast('Conexão com a Focus NFe bem-sucedida!', 'success');
-          icon.className = 'fa-solid fa-check text-success';
-        } else if (response.status === 401) {
-          showToast('Token inválido ou acesso não autorizado.', 'error');
-          icon.className = 'fa-solid fa-xmark text-danger';
-        } else {
-          showToast(`Erro na API (${response.status})`, 'error');
-          icon.className = 'fa-solid fa-triangle-exclamation text-warning';
-        }
+        await focus.testarConexao(token, ambiente);
+        
+        showToast('Conexão com a Focus NFe bem-sucedida!', 'success');
+        icon.className = 'fa-solid fa-check text-success';
       } catch (err) {
-        showToast('Erro de comunicação com o servidor Focus NFe', 'error');
+        showToast(`Falha na conexão: ${err.message}`, 'error');
         icon.className = 'fa-solid fa-xmark text-danger';
       } finally {
         setTimeout(() => {
@@ -442,6 +455,10 @@ async function openEmpresaModal(editId = null) {
       cep: document.getElementById('emp-cep').value.trim(),
       focusToken: document.getElementById('emp-focus-token').value.trim(),
       focusAmbiente: document.getElementById('emp-focus-ambiente').value,
+      responsavelSeguro: document.getElementById('emp-seg-resp').value,
+      seguradoraCnpj: document.getElementById('emp-seg-cnpj').value.replace(/\D/g, ''),
+      seguradoraNome: document.getElementById('emp-seg-nome').value.trim(),
+      numeroApolice: document.getElementById('emp-seg-apolice').value.trim(),
       ...(isEdit ? { id: editId } : {})
     };
 

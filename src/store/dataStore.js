@@ -84,6 +84,8 @@ function buildVeiculoRecord(veiculo) {
         cap_kg: veiculo.capKg || veiculo.cap_kg,
         cap_m3: veiculo.capM3 || veiculo.cap_m3,
         renavam: veiculo.renavam,
+        proprietario_nome: veiculo.proprietarioNome || veiculo.proprietario_nome,
+        proprietario_doc: veiculo.proprietarioDoc || veiculo.proprietario_doc,
         ativo: veiculo.ativo !== false
     };
 }
@@ -104,7 +106,12 @@ export async function getVeiculoById(id) {
 
 function mapVeiculo(row) {
     if (!row) return null;
-    return { id: row.id, placa: row.placa, uf: row.uf, tipoRodado: row.tipo_rodado, tipoCarroceria: row.tipo_carroceria, tara: row.tara, capKg: row.cap_kg, capM3: row.cap_m3, renavam: row.renavam, ativo: row.ativo, criadoEm: row.criado_em };
+    return { 
+        id: row.id, placa: row.placa, uf: row.uf, tipoRodado: row.tipo_rodado, tipoCarroceria: row.tipo_carroceria, 
+        tara: row.tara, capKg: row.cap_kg, capM3: row.cap_m3, renavam: row.renavam,
+        proprietarioNome: row.proprietario_nome, proprietarioDoc: row.proprietario_doc,
+        ativo: row.ativo, criadoEm: row.criado_em 
+    };
 }
 
 // ---- MDF-e ----
@@ -268,6 +275,10 @@ export async function saveEmpresa(empresa) {
         telefone: empresa.telefone,
         endereco: empresa.endereco,
         cep: empresa.cep,
+        seguradora_nome: empresa.seguradoraNome || empresa.seguradora_nome,
+        seguradora_cnpj: empresa.seguradoraCnpj || empresa.seguradora_cnpj,
+        numero_apolice: empresa.numeroApolice || empresa.numero_apolice,
+        responsavel_seguro: empresa.responsavelSeguro || empresa.responsavel_seguro,
         focus_token: empresa.focusToken || empresa.focus_token,
         focus_ambiente: empresa.focusAmbiente || empresa.focus_ambiente || 'homologacao'
     };
@@ -298,6 +309,8 @@ function mapEmpresa(row) {
         cnpj: row.cnpj, cpf: row.cpf, ie: row.ie, uf: row.uf, municipio: row.municipio,
         codMunicipio: row.cod_municipio, tipoTransporte: row.tipo_transporte, rntrc: row.rntrc,
         telefone: row.telefone, endereco: row.endereco, cep: row.cep,
+        seguradoraNome: row.seguradora_nome, seguradoraCnpj: row.seguradora_cnpj,
+        numeroApolice: row.numero_apolice, responsavelSeguro: row.responsavel_seguro,
         focusToken: row.focus_token, focusAmbiente: row.focus_ambiente
     };
 }

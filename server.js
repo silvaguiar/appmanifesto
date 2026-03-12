@@ -28,7 +28,16 @@ async function proxyToFocus(req, res) {
     }
 
     const baseUrl = FOCUS_URLS[ambiente] || FOCUS_URLS.homologacao;
-    const targetUrl = `${baseUrl}${req.originalUrl.replace('/api/focus', '')}`;
+    // Obter o sufixo da rota original para enviar à Focus NFe
+    let apiPath = req.query.path || '';
+    if (!apiPath && req.params.path) {
+        // Pega do path do wildcard do Express (*path)
+        apiPath = '/' + req.params.path;
+    }
+    
+    // Ouve no format: /v2/empresas
+    const targetUrl = `${baseUrl}${apiPath}`;
+    console.log(`[PROXY] Roteando para: ${targetUrl}`);
 
     try {
         const fetchOptions = {
@@ -83,8 +92,8 @@ async function proxyToFocus(req, res) {
     }
 }
 
-// Routes - proxy all /api/focus/* to Focus NFe
-app.all('/api/focus/*path', proxyToFocus);
+// Routes - proxy all /api/focus requests to Focus NFe
+app.all(['/api/focus', '/api/focus/*path'], proxyToFocus);
 
 // Health check
 app.get('/api/health', (req, res) => {

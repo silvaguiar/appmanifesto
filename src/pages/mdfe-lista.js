@@ -1,4 +1,4 @@
-import { getMDFes, getMotoristaById, getVeiculoById, getMDFeById, deleteMDFe, updateMDFeStatus, getEmpresaById, getMotoristas, getVeiculos } from '../store/dataStore.js';
+import { getMDFes, getMotoristaById, getVeiculoById, getMDFeById, deleteMDFe, updateMDFeStatus, getEmpresaById, getMotoristas, getVeiculos, getEmpresas } from '../store/dataStore.js';
 import { formatarCPF, formatarChaveAcesso, UFS } from '../utils/validators.js';
 import { showToast } from '../components/toast.js';
 import * as focus from '../services/focusNfe.js';
@@ -19,14 +19,16 @@ export async function renderMDFeLista() {
   const content = document.getElementById('page-content');
   content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
-  const [allMdfes, allMotoristas, allVeiculos] = await Promise.all([
+  const [allMdfes, allMotoristas, allVeiculos, allEmpresas] = await Promise.all([
     getMDFes(),
     getMotoristas(),
-    getVeiculos()
+    getVeiculos(),
+    getEmpresas()
   ]);
 
   cacheMotoristas = allMotoristas;
   cacheVeiculos = allVeiculos;
+  const cacheEmpresas = allEmpresas;
 
   let mdfes = allMdfes.sort((a, b) => new Date(b.criadoEm) - new Date(a.criadoEm));
 
@@ -57,9 +59,10 @@ export async function renderMDFeLista() {
     </div>
     ${mdfes.length === 0 ? `<div class="card"><div class="empty-state"><i class="fa-solid fa-file-lines"></i><h4>Nenhum MDF-e encontrado</h4><p>Emita seu primeiro MDF-e ou ajuste os filtros</p></div></div>` : `
     <div class="table-container"><table class="table"><thead><tr>
-      <th>Número</th><th>Data</th><th>Motorista</th><th>Veículo</th><th>Rota</th><th>Valor</th><th>Emitido por</th><th>Status</th><th style="width:200px">Ações</th>
+      <th>Número</th><th>Data</th><th>Motorista</th><th>Veículo</th><th>Rota</th><th>Valor</th><th>Emissora</th><th>Status</th><th style="width:200px">Ações</th>
     </tr></thead><tbody>
       ${mdfes.map(m => {
+    const emp = cacheEmpresas.find(x => x.id === (m.empresaId || m.empresa_id));
     const mot = cacheMotoristas.find(x => x.id === m.motoristaId);
     const veic = cacheVeiculos.find(x => x.id === m.veiculoId);
     const dt = new Date(m.dtEmissao || m.criadoEm).toLocaleDateString('pt-BR');
@@ -70,7 +73,10 @@ export async function renderMDFeLista() {
           <td style="font-family:monospace">${veic ? veic.placa : '-'}</td>
           <td>${m.ufInicio} → ${m.ufFim}</td>
           <td>R$ ${Number(m.valorCarga || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-          <td style="font-size:0.75rem;color:var(--text-muted)">${m.emitidoPor || '-'}</td>
+          <td>
+            <div style="font-size:0.75rem;font-weight:600;color:var(--text-primary);margin-bottom:2px">${emp ? (emp.nomeFantasia || emp.razaoSocial) : 'Empresa não encontrada'}</div>
+            <div style="font-size:0.70rem;color:var(--text-muted)"><i class="fa-solid fa-user" style="margin-right:4px"></i>${m.emitidoPor || '-'}</div>
+          </td>
           <td>${getStatusBadge(m.status)}</td>
           <td><div class="actions">
             ${m.status === 'erro_autorizacao' || m.status === 'encerrado' || m.status === 'cancelado' || m.status === 'autorizado' || m.status === 'processando_autorizacao' ? `
