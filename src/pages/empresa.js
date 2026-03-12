@@ -490,10 +490,17 @@ async function openEmpresaModal(editId = null) {
       dadosEmpresa.cpf = null;
     }
 
-    await saveEmpresa(dadosEmpresa);
-    showToast(isEdit ? 'Empresa atualizada!' : 'Empresa cadastrada!', 'success');
-    closeModal();
-    renderEmpresa();
+    try {
+      await saveEmpresa(dadosEmpresa);
+      showToast(isEdit ? 'Empresa atualizada!' : 'Empresa cadastrada!', 'success');
+      closeModal();
+      renderEmpresa();
+    } catch (error) {
+      console.error('Erro ao salvar empresa:', error);
+      showToast('Erro ao salvar: ' + error.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fa-solid fa-check"></i> ${isEdit ? 'Salvar Alterações' : 'Cadastrar Empresa'}`;
+    }
   });
 }
 
