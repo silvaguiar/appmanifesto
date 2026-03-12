@@ -1,5 +1,5 @@
 import { getMotoristas, getVeiculos, getMotoristaById, getVeiculoById, saveMDFe, getEmpresas, updateMDFeStatus, getCurrentUser, getUserEmpresas, getEmpresaById } from '../store/dataStore.js';
-import { UFS, formatarCPF, formatarChaveAcesso, validarChaveAcesso, TIPOS_RODADO, TIPOS_CARROCERIA } from '../utils/validators.js';
+import { UFS, formatarCPF, formatarCNPJ, formatarChaveAcesso, validarChaveAcesso, TIPOS_RODADO, TIPOS_CARROCERIA } from '../utils/validators.js';
 import { showToast } from '../components/toast.js';
 import { navigate } from '../router.js';
 import * as focus from '../services/focusNfe.js';
