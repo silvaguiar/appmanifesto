@@ -46,7 +46,11 @@ async function request(method, path, body = null, cfg = null) {
         options.body = JSON.stringify(body);
     }
 
-    const resp = await fetch(`${PROXY_URL}${path}`, options);
+    // O proxy na Vercel (/api/focus.js) espera o caminho via query param ?path=
+    // Se anexarmos direto (ex: /api/focus/v2/mdfe), a Vercel retorna 404 pois procura um arquivo/pasta "v2"
+    const targetUrl = `${PROXY_URL}?path=${encodeURIComponent(path)}`;
+    
+    const resp = await fetch(targetUrl, options);
     const contentType = resp.headers.get('content-type') || '';
 
     // Trata respostas JSON
