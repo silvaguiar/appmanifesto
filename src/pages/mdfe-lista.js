@@ -422,6 +422,12 @@ async function doCancelar(id) {
     const just = document.getElementById('canc-just').value.trim();
     if (just.length < 15) { showToast('Justificativa deve ter no mínimo 15 caracteres', 'error'); return; }
 
+    const empresa = await getEmpresaById(m.empresaId || m.empresa_id);
+    const apiCfg = { 
+      token: empresa?.focusToken || empresa?.focus_token, 
+      ambiente: empresa?.focusAmbiente || empresa?.focus_ambiente || 'homologacao' 
+    };
+
     if (!apiCfg.token) {
       await updateMDFeStatus(id, { status: 'cancelado', dtCancelamento: new Date().toISOString() });
       showToast('MDF-e cancelado (local)', 'warning');
@@ -557,14 +563,6 @@ async function doManutencao(id) {
       infoComplementar: document.getElementById('man-info').value
     };
 
-    const apiCfg = { token: empresa?.focusToken || empresa?.focus_token, ambiente: empresa?.focusAmbiente || empresa?.focus_ambiente || 'homologacao' };
-
-    if (!apiCfg.token) {
-      await updateMDFeStatus(id, { ...dataUpdates, status: 'autorizado' });
-      showToast('MDF-e atualizado (local)', 'success');
-      overlay.remove(); renderMDFeLista(); return;
-    }
-
     try {
       const btn = document.getElementById('btn-man-reenviar');
       btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reenviando...';
@@ -572,6 +570,17 @@ async function doManutencao(id) {
       const empresa = await getEmpresaById(m.empresaId || m.empresa_id);
       const motorista = await getMotoristaById(m.motoristaId);
       const veiculo = await getVeiculoById(m.veiculoId);
+      
+      const apiCfg = { 
+        token: empresa?.focusToken || empresa?.focus_token, 
+        ambiente: empresa?.focusAmbiente || empresa?.focus_ambiente || 'homologacao' 
+      };
+
+      if (!apiCfg.token) {
+        showToast('Configure o Token da Focus NFe na Empresa primeiro.', 'warning');
+        btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Salvar e Reenviar à SEFAZ';
+        return;
+      }
 
       const payload = focus.montarPayloadMDFe({ ...m, ...dataUpdates }, motorista, veiculo, empresa);
 
