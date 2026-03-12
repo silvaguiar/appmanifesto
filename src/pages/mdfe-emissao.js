@@ -50,8 +50,22 @@ async function resetForm() {
 export async function renderMDFeEmissao() {
   const content = document.getElementById('page-content');
   content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-  await resetForm();
-  await renderWizard();
+  
+  try {
+    await resetForm();
+    await renderWizard();
+  } catch (error) {
+    console.error('Erro ao carregar formulário de MDF-e:', error);
+    showToast('Erro ao carregar dados: ' + error.message, 'error');
+    content.innerHTML = `
+      <div style="text-center; padding: 40px;">
+        <i class="fa-solid fa-triangle-exclamation" style="font-size: 3rem; color: var(--danger); margin-bottom: 20px;"></i>
+        <h3>Falha no carregamento</h3>
+        <p>${error.message}</p>
+        <button class="btn btn-primary" onclick="window.location.reload()" style="margin-top: 20px;">Tentar Novamente</button>
+      </div>
+    `;
+  }
 }
 
 async function renderWizard() {
