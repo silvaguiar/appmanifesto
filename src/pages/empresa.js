@@ -196,13 +196,14 @@ async function openEmpresaModal(editId = null) {
             </div>
             <div class="form-group">
               <label class="form-label">Município *</label>
-              <input type="text" class="form-control" id="emp-municipio" value="${emp.municipio || ''}" placeholder="Município">
+              <input type="text" class="form-control" id="emp-municipio" list="dl-emp-mun" value="${emp.municipio || ''}" placeholder="Selecione a UF origem e digite a Cidade" autocomplete="off">
+              <datalist id="dl-emp-mun"></datalist>
             </div>
             <div class="form-group">
               <label class="form-label">Cód. IBGE do Município *
                 <span style="font-size:0.72rem;color:var(--text-muted);font-weight:400;margin-left:4px">7 dígitos</span>
               </label>
-              <input type="text" class="form-control" id="emp-cod-municipio" value="${emp.codMunicipio || ''}" placeholder="Ex: 3550308" maxlength="7">
+              <input type="text" class="form-control" id="emp-cod-municipio" value="${emp.codMunicipio || ''}" placeholder="Ex: 3550308" readonly style="background:rgba(255,255,255,0.03);color:var(--text-muted);cursor:not-allowed">
             </div>
           </div>
 
@@ -293,6 +294,42 @@ async function openEmpresaModal(editId = null) {
 
   const telInput = document.getElementById('emp-telefone');
   telInput.addEventListener('input', () => { telInput.value = formatarTelefone(telInput.value); });
+  
+  // IBGE Autocomplete
+  const fetchCidades = async (uf, datalistId, stateVar, clearFields) => {
+    if (!uf) return;
+    if (clearFields && document.getElementById(clearFields.mun)) document.getElementById(clearFields.mun).value = '';
+    if (clearFields && document.getElementById(clearFields.cod)) document.getElementById(clearFields.cod).value = '';
+    try {
+      const res = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`);
+      const data = await res.json();
+      window[stateVar] = data;
+      const dl = document.getElementById(datalistId);
+      if (dl) dl.innerHTML = data.map(c => `<option value="${c.nome}"></option>`).join('');
+    } catch (err) { console.error('Erro IBGE:', err); }
+  };
+
+  const ufInput = document.getElementById('emp-uf');
+  if (ufInput) {
+    ufInput.addEventListener('change', () => fetchCidades(ufInput.value, 'dl-emp-mun', 'empMunList', { mun: 'emp-municipio', cod: 'emp-cod-municipio' }));
+  }
+
+  // Initial load for edit
+  if (emp.uf && !window.empMunList) {
+    fetchCidades(emp.uf, 'dl-emp-mun', 'empMunList', null);
+  } else if (emp.uf && window.empMunList) {
+    const dl = document.getElementById('dl-emp-mun');
+    if (dl) dl.innerHTML = window.empMunList.map(c => `<option value="${c.nome}"></option>`).join('');
+  }
+
+  const munInput = document.getElementById('emp-municipio');
+  if (munInput) {
+    munInput.addEventListener('change', () => {
+      if (!window.empMunList) return;
+      const cid = window.empMunList.find(c => c.nome.toLowerCase() === munInput.value.toLowerCase());
+      if (cid) document.getElementById('emp-cod-municipio').value = cid.id;
+    });
+  }
 
   // Close rules
   const closeModal = () => overlay.remove();
