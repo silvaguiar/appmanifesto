@@ -1,19 +1,17 @@
 {
-  "emitente": 1,
-  "tipo_transporte": "2",
+  "emitente": 2,
   "modal": 1,
   "serie": "1",
   "numero": null,
-  "data_emissao": "2026-03-12",
+  "data_emissao": "2026-03-13",
   "uf_inicio": "PB",
   "uf_fim": "RN",
-  "cpf_emitente": "01774124459",
-  "razao_social_emitente": "PAULO CESAR DA ROCHA GUIMARAES",
-  "inscricao_estadual_emitente": "ISENTO",
+  "cnpj_emitente": "44498615000165",
+  "razao_social_emitente": "SLV COMERCIO E SERIGRAFIA  LTDA",
+  "inscricao_estadual_emitente": "164195734",
   "uf_emitente": "PB",
   "municipio_emitente": "Campina Grande",
   "codigo_municipio_emitente": "2504009",
-  "rntrc_emitente": "58671077",
   "municipios_carregamento": [
     {
       "codigo": "2504009",
@@ -26,16 +24,16 @@
       "nome": "Natal",
       "notas_fiscais": [
         {
-          "chave_nfe": "25260140950354000383550010000078241629343383"
+          "chave_nfe": "25260340950354000111550020000178261565622780"
         }
       ]
     }
   ],
   "quantidade_total_cte": 0,
   "quantidade_total_nfe": 1,
-  "valor_total_carga": 1200,
+  "valor_total_carga": 3000,
   "codigo_unidade_medida_peso_bruto": "01",
-  "peso_bruto": 500,
+  "peso_bruto": 100,
   "informacoes_adicionais_fisco": "null",
   "modal_rodoviario": {
     "placa_veiculo": "OYB0I60",
@@ -50,12 +48,6 @@
         "nome": "PAULO CESAR DA ROCHA GUIMARAES",
         "cpf": "01774124459"
       }
-    ],
-    "cpf_proprietario_veiculo": "07271833463",
-    "razao_social_proprietario_veiculo": "RENNAN VICTOR DE F PENAFORTE",
-    "rntrc_proprietario_veiculo": "00000000",
-    "inscricao_estadual_proprietario_veiculo": "ISENTO",
-    "uf_proprietario_veiculo": "PB",
-    "tipo_proprietario_veiculo": "0"
+    ]
   }
 }

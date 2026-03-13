@@ -210,9 +210,9 @@ export function montarPayloadMDFe(formData, motorista, veiculo, empresa) {
         codigo_unidade_medida_peso_bruto: '01', // KG
         peso_bruto: parseFloat(formData.pesoBruto) || 0,
 
-        // Info complementar
-        ...(formData.infoComplementar ? {
-            informacoes_adicionais_fisco: formData.infoComplementar
+        // Info complementar — evita string "null" literal
+        ...(formData.infoComplementar && formData.infoComplementar !== 'null' ? {
+            informacoes_adicionais_fisco: formData.infoComplementar.trim()
         } : {}),
 
         // Seguro de Carga (Obrigatório para prestadores de serviço - TAC/ETC/CTC)
