@@ -8,6 +8,14 @@ let filterStatus = 'todos';
 let searchTerm = '';
 let cacheMotoristas = [];
 let cacheVeiculos = [];
+let pollingInterval = null;
+
+function limparPolling() {
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+    pollingInterval = null;
+  }
+}
 
 export async function renderMDFeLista() {
   // Check if a filter was set by the dashboard cards
@@ -125,6 +133,58 @@ export async function renderMDFeLista() {
   document.querySelectorAll('.btn-reprocessar').forEach(b => b.addEventListener('click', () => doReprocessar(b.dataset.id)));
   document.querySelectorAll('.btn-duplicar').forEach(b => b.addEventListener('click', () => doDuplicar(b.dataset.id)));
   document.querySelectorAll('.btn-delete-local').forEach(b => b.addEventListener('click', () => doDeleteLocal(b.dataset.id)));
+
+  // Automatização: Iniciar polling se houver itens processando
+  const temProcessando = mdfes.some(m => m.status === 'processando_autorizacao');
+  if (temProcessando) {
+    iniciarPollingAutomatico(mdfes.filter(m => m.status === 'processando_autorizacao'), cacheEmpresas);
+  } else {
+    limparPolling();
+  }
+}
+
+// ---- Polling Automático ----
+function iniciarPollingAutomatico(mdfesProcessando, empresas) {
+  limparPolling();
+  
+  pollingInterval = setInterval(async () => {
+    let houveMudanca = false;
+
+    for (const m of mdfesProcessando) {
+      try {
+        const empresa = empresas.find(e => e.id === (m.empresaId || m.empresa_id));
+        if (!empresa) continue;
+
+        const apiCfg = { 
+          token: empresa.focusToken || empresa.focus_token, 
+          ambiente: empresa.focusAmbiente || empresa.focus_ambiente || 'homologacao' 
+        };
+
+        const result = await focus.consultarMDFe(m.focusRef || m.id, false, apiCfg);
+        
+        // Se o status mudou na SEFAZ, atualiza no banco
+        if (result.status !== 'processando_autorizacao') {
+          await updateMDFeStatus(m.id, {
+            status: result.status,
+            statusSefaz: result.status_sefaz,
+            mensagemSefaz: result.mensagem_sefaz,
+            chaveMdfe: result.chave_mdfe,
+            numeroSefaz: result.numero,
+            caminhoDAMDFE: result.caminho_damdfe,
+            caminhoXml: result.caminho_xml
+          });
+          houveMudanca = true;
+        }
+      } catch (err) {
+        console.error('Erro no polling do MDF-e:', m.id, err);
+      }
+    }
+
+    if (houveMudanca) {
+      // Se algo mudou, recarrega a lista para mostrar o novo status
+      renderMDFeLista();
+    }
+  }, 10000); // 10 segundos
 }
 
 // ---- Duplicar MDF-e ----
