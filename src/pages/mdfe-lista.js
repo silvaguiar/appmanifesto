@@ -88,8 +88,10 @@ export async function renderMDFeLista() {
               <button class="btn btn-sm btn-success btn-encerrar" data-id="${m.id}" title="Encerrar na SEFAZ"><i class="fa-solid fa-lock"></i></button>
               <button class="btn btn-sm btn-danger btn-cancelar" data-id="${m.id}" title="Cancelar na SEFAZ"><i class="fa-solid fa-ban"></i></button>
             `: ''}
-            ${m.status === 'processando_autorizacao' ? `
+            ${m.status === 'processando_autorizacao' || m.status === 'autorizado' ? `
               <button class="btn btn-sm btn-secondary btn-refresh" data-id="${m.id}" title="Atualizar Status"><i class="fa-solid fa-arrows-rotate"></i></button>
+            `: ''}
+            ${m.status === 'processando_autorizacao' ? `
               <button class="btn btn-sm btn-danger btn-delete-local" data-id="${m.id}" title="Excluir (sem vínculo SEFAZ)"><i class="fa-solid fa-trash"></i></button>
             `: ''}
             ${(m.status === 'processando_autorizacao' || m.status === 'erro_autorizacao') ? `
