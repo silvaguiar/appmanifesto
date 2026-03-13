@@ -168,10 +168,10 @@ export function montarPayloadMDFe(formData, motorista, veiculo, empresa) {
 
         // Emitente — usa CPF (TAC) ou CNPJ (ETC/CTC), sem máscaras
         ...(isPessoaFisica
-            ? { cpf_emitente: empresa.cpf }
-            : { cnpj_emitente: empresa.cnpj }),
-        razao_social_emitente: empresa.razaoSocial || '',
-        inscricao_estadual_emitente: empresa.ie || '',
+            ? { cpf_emitente: (empresa.cpf || '').replace(/\D/g, '') }
+            : { cnpj_emitente: (empresa.cnpj || '').replace(/\D/g, '') }),
+        razao_social_emitente: (empresa.razaoSocial || '').trim(),
+        inscricao_estadual_emitente: (empresa.ie || '').replace(/\D/g, ''),
         uf_emitente: empresa.uf || '',
         municipio_emitente: empresa.municipio || '',
         ...(empresa.codMunicipio ? { codigo_municipio_emitente: empresa.codMunicipio } : {}),
