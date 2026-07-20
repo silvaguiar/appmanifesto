@@ -96,7 +96,7 @@ export async function renderMDFeLista() {
               <button class="btn btn-sm btn-success btn-encerrar" data-id="${m.id}" title="Encerrar na SEFAZ"><i class="fa-solid fa-lock"></i></button>
               <button class="btn btn-sm btn-danger btn-cancelar" data-id="${m.id}" title="Cancelar na SEFAZ"><i class="fa-solid fa-ban"></i></button>
             `: ''}
-            ${m.status === 'processando_autorizacao' || m.status === 'autorizado' ? `
+            ${m.status === 'processando_autorizacao' || m.status === 'autorizado' || m.status === 'erro_cancelamento' ? `
               <button class="btn btn-sm btn-secondary btn-refresh" data-id="${m.id}" title="Atualizar Status"><i class="fa-solid fa-arrows-rotate"></i></button>
             `: ''}
             ${m.status === 'processando_autorizacao' ? `
@@ -110,7 +110,7 @@ export async function renderMDFeLista() {
             `: ''}
           </div></td>
         </tr>
-        ${m.status === 'erro_autorizacao' && m.mensagemSefaz ? `<tr><td colspan="8" style="padding:8px 18px;background:rgba(248,113,113,0.06);border-bottom:1px solid rgba(248,113,113,0.1)">
+        ${(m.status === 'erro_autorizacao' || m.status === 'erro_cancelamento') && m.mensagemSefaz ? `<tr><td colspan="8" style="padding:8px 18px;background:rgba(248,113,113,0.06);border-bottom:1px solid rgba(248,113,113,0.1)">
           <div style="display:flex;align-items:center;gap:8px">
             <i class="fa-solid fa-circle-exclamation" style="color:var(--danger)"></i>
             <span style="font-size:0.8rem;color:var(--danger)"><strong>Rejeição SEFAZ${m.statusSefaz ? ' (' + m.statusSefaz + ')' : ''}:</strong> ${m.mensagemSefaz}</span>
